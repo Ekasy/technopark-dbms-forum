@@ -52,4 +52,14 @@ var (
 		Code:    409,
 		Message: "",
 	}
+
+	ForumAlreadyExist CustomError = CustomError{
+		Code:    500,
+		Message: "forum with this slug already exist",
+	}
+
+	UserNotExist CustomError = CustomError{
+		Code:    500,
+		Message: "user not exist",
+	}
 )
