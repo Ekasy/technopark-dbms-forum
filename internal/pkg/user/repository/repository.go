@@ -28,12 +28,13 @@ func (ur *UserRepository) InsertUser(user *models.User) error {
 		return myerr.InternalDbError
 	}
 
-	_, err = tx.ExecContext(
+	row := tx.QueryRowContext(
 		context.Background(),
-		"INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4);",
+		"INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4) RETURNING nickname, fullname, about, email;",
 		user.Nickname, user.Fullname, user.About, user.Email,
 	)
 
+	err = row.Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
 	if err != nil {
 		res, _ := regexp.Match(".*users_pkey.*", []byte(err.Error()))
 		if res {
@@ -68,14 +69,20 @@ func (ur *UserRepository) UpdateUser(user *models.User) error {
 		return myerr.InternalDbError
 	}
 
-	res, err := tx.ExecContext(
+	row := tx.QueryRowContext(
 		context.Background(),
-		"UPDATE users SET fullname = $2, about = $3, email = $4 WHERE nickname = $1;",
+		"UPDATE users SET fullname = $2, about = $3, email = $4 WHERE nickname = $1 RETURNING nickname, fullname, about, email;",
 		user.Nickname, user.Fullname, user.About, user.Email,
 	)
 
+	err = row.Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
 	if err != nil {
-		res, _ := regexp.Match(".*users_email_key.*", []byte(err.Error()))
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return myerr.NoRows
+		}
+
+		res, _ = regexp.Match(".*users_email_key.*", []byte(err.Error()))
 		if res {
 			return myerr.EmailAlreadyExist
 		}
@@ -88,10 +95,6 @@ func (ur *UserRepository) UpdateUser(user *models.User) error {
 			return myerr.RollbackError
 		}
 		return myerr.InternalDbError
-	}
-
-	if ra, _ := res.RowsAffected(); ra != 1 {
-		return myerr.NoRows
 	}
 
 	err = tx.Commit()
