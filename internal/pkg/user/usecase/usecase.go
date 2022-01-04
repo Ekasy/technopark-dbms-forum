@@ -44,6 +44,21 @@ func (uu *UserUsecase) CreateUser(user *models.User) ([]*models.User, bool, erro
 }
 
 func (uu *UserUsecase) UpdateUser(user *models.User) (*models.User, error) {
-	err := uu.repo.UpdateUser(user)
+	userOld, err := uu.repo.SelectUser(user.Nickname)
+	if err == nil {
+		if user.Fullname == "" {
+			user.Fullname = userOld.Fullname
+		}
+
+		if user.About == "" {
+			user.About = userOld.About
+		}
+
+		if user.Email == "" {
+			user.Email = userOld.Email
+		}
+	}
+
+	err = uu.repo.UpdateUser(user)
 	return user, err
 }

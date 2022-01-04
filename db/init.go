@@ -3,15 +3,12 @@ package db
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	_ "github.com/jackc/pgx/stdlib"
 )
 
-type Database struct {
-	db *sql.DB
-}
-
-func NewDatabase(connString string) (*Database, error) {
+func NewDatabase(connString string) (*sql.DB, error) {
 	db, err := sql.Open("pgx", connString)
 	if err != nil {
 		log.Fatalf("could not connect to database: %s", err.Error())
@@ -25,14 +22,8 @@ func NewDatabase(connString string) (*Database, error) {
 	}
 
 	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(time.Minute * 3)
 
-	return &Database{db: db}, nil
-}
-
-func (db *Database) Close() {
-	db.db.Close()
-}
-
-func (db *Database) GetPool() *sql.DB {
-	return db.db
+	return db, nil
 }

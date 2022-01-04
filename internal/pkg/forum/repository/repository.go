@@ -30,28 +30,27 @@ func (fr *ForumRepository) InsertForum(forum *models.Forum) error {
 
 	row := tx.QueryRowContext(
 		context.Background(),
-		`INSERT INTO forum (slug, title, "user") VALUES ($1, $2, $3) RETURNING slug, title, user, posts, threads;`,
+		`INSERT INTO forum (slug, title, author) VALUES ($1, $2, COALESCE((SELECT nickname FROM users WHERE nickname = $3), $3)) RETURNING slug, title, author, posts, threads;`,
 		forum.Slug, forum.Title, forum.User,
 	)
 
 	err = row.Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Posts, &forum.Threads)
 	if err != nil {
-		res, _ := regexp.Match(".*forum_pkey.*", []byte(err.Error()))
-		if res {
-			return myerr.ForumAlreadyExist
-		}
-		res, _ = regexp.Match(".*forum_user_fkey.*", []byte(err.Error()))
-		if res {
-			return myerr.UserNotExist
-		}
-	}
-
-	if err != nil {
-		fr.logger.Printf(err.Error())
 		rollbackError := tx.Rollback()
 		if rollbackError != nil {
 			return myerr.RollbackError
 		}
+
+		res, _ := regexp.Match(".*forum_pkey.*", []byte(err.Error()))
+		if res {
+			return myerr.ForumAlreadyExist
+		}
+		res, _ = regexp.Match(".*forum_author_fkey.*", []byte(err.Error()))
+		if res {
+			return myerr.UserNotExist
+		}
+
+		fr.logger.Printf(err.Error())
 		return myerr.InternalDbError
 	}
 
@@ -59,13 +58,13 @@ func (fr *ForumRepository) InsertForum(forum *models.Forum) error {
 	if err != nil {
 		return myerr.CommitError
 	}
+
 	return nil
 }
 
 func (fr *ForumRepository) SelectForum(slug string) (*models.Forum, error) {
-	row := fr.db.QueryRowContext(
-		context.Background(),
-		`SELECT slug, title, "user", posts, threads FROM forum WHERE slug = $1`,
+	row := fr.db.QueryRow(
+		`SELECT slug, title, author, posts, threads FROM forum WHERE slug = $1`,
 		slug,
 	)
 

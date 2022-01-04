@@ -23,19 +23,24 @@ func NewUserRepository(db *sql.DB) user.UserRepository {
 }
 
 func (ur *UserRepository) InsertUser(user *models.User) error {
-	tx, err := ur.db.BeginTx(context.Background(), nil)
+	tx, err := ur.db.BeginTx(context.Background(), &sql.TxOptions{})
 	if err != nil {
 		return myerr.InternalDbError
 	}
 
-	row := tx.QueryRowContext(
-		context.Background(),
+	row := tx.QueryRow(
 		"INSERT INTO users (nickname, fullname, about, email) VALUES ($1, $2, $3, $4) RETURNING nickname, fullname, about, email;",
 		user.Nickname, user.Fullname, user.About, user.Email,
 	)
 
 	err = row.Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
+
 	if err != nil {
+		rollbackError := tx.Rollback()
+		if rollbackError != nil {
+			return myerr.RollbackError
+		}
+
 		res, _ := regexp.Match(".*users_pkey.*", []byte(err.Error()))
 		if res {
 			return myerr.NicknameAlreadyExist
@@ -45,14 +50,8 @@ func (ur *UserRepository) InsertUser(user *models.User) error {
 		if res {
 			return myerr.EmailAlreadyExist
 		}
-	}
 
-	if err != nil {
 		ur.logger.Printf(err.Error())
-		rollbackError := tx.Rollback()
-		if rollbackError != nil {
-			return myerr.RollbackError
-		}
 		return myerr.InternalDbError
 	}
 
@@ -64,19 +63,23 @@ func (ur *UserRepository) InsertUser(user *models.User) error {
 }
 
 func (ur *UserRepository) UpdateUser(user *models.User) error {
-	tx, err := ur.db.BeginTx(context.Background(), nil)
+	tx, err := ur.db.BeginTx(context.Background(), &sql.TxOptions{})
 	if err != nil {
 		return myerr.InternalDbError
 	}
 
-	row := tx.QueryRowContext(
-		context.Background(),
+	row := tx.QueryRow(
 		"UPDATE users SET fullname = $2, about = $3, email = $4 WHERE nickname = $1 RETURNING nickname, fullname, about, email;",
 		user.Nickname, user.Fullname, user.About, user.Email,
 	)
 
 	err = row.Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
 	if err != nil {
+		rollbackError := tx.Rollback()
+		if rollbackError != nil {
+			return myerr.RollbackError
+		}
+
 		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
 		if res {
 			return myerr.NoRows
@@ -86,14 +89,8 @@ func (ur *UserRepository) UpdateUser(user *models.User) error {
 		if res {
 			return myerr.EmailAlreadyExist
 		}
-	}
 
-	if err != nil {
 		ur.logger.Printf(err.Error())
-		rollbackError := tx.Rollback()
-		if rollbackError != nil {
-			return myerr.RollbackError
-		}
 		return myerr.InternalDbError
 	}
 
@@ -105,8 +102,7 @@ func (ur *UserRepository) UpdateUser(user *models.User) error {
 }
 
 func (ur *UserRepository) SelectUser(nickname string) (*models.User, error) {
-	row := ur.db.QueryRowContext(
-		context.Background(),
+	row := ur.db.QueryRow(
 		"SELECT nickname, fullname, about, email FROM users WHERE nickname = $1",
 		nickname,
 	)
@@ -129,9 +125,8 @@ func (ur *UserRepository) SelectUser(nickname string) (*models.User, error) {
 }
 
 func (ur *UserRepository) SelectUsersIfExists(nickname string, email string) ([]*models.User, error) {
-	rows, err := ur.db.QueryContext(
-		context.Background(),
-		"SELECT nickname, fullname, about, email FROM users WHERE nickname = $1 OR email = $2",
+	rows, err := ur.db.Query(
+		"SELECT nickname, fullname, about, email FROM users WHERE nickname = $1 OR email = $2;",
 		nickname, email,
 	)
 	if err != nil {
