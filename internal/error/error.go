@@ -62,4 +62,19 @@ var (
 		Code:    500,
 		Message: "user not exist",
 	}
+
+	AuthorNotExist CustomError = CustomError{
+		Code:    500,
+		Message: "forum with this author not exist",
+	}
+
+	ForumNotExist CustomError = CustomError{
+		Code:    500,
+		Message: "forum with this slug not exist",
+	}
+
+	ThreadAlreadyExist CustomError = CustomError{
+		Code:    500,
+		Message: "thread with this slug not exist",
+	}
 )
