@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS threads (
     FOREIGN KEY (forum) REFERENCES forum (slug)
 );
 
+CREATE UNIQUE INDEX pindex_threads_slug ON threads(slug) WHERE TRIM(slug) <> '';
+
 CREATE TABLE IF NOT EXISTS posts (
     id          BIGSERIAL                   NOT NULL PRIMARY KEY,
     parent      BIGINT                      NOT NULL DEFAULT 0,

@@ -21,6 +21,10 @@ import (
 	userdeli "forum/internal/pkg/user/delivery"
 	userrepo "forum/internal/pkg/user/repository"
 	userusec "forum/internal/pkg/user/usecase"
+
+	votedeli "forum/internal/pkg/votes/delivery"
+	voterepo "forum/internal/pkg/votes/repository"
+	voteusec "forum/internal/pkg/votes/usecase"
 	"log"
 	"net/http"
 
@@ -50,6 +54,10 @@ func main() {
 	pu := postusec.NewPostUsecase(pr)
 	pd := postdeli.NewPostDelivery(pu)
 
+	vr := voterepo.NewVoteRepository(db)
+	vu := voteusec.NewVoteUsecase(vr)
+	vd := votedeli.NewVoteDelivery(vu)
+
 	r := mux.NewRouter()
 	r = r.PathPrefix("/api").Subrouter()
 	r.Use(middleware.ContentTypeMiddleware)
@@ -57,6 +65,7 @@ func main() {
 	fd.Routing(r)
 	td.Routing(r)
 	pd.Routing(r)
+	vd.Routing(r)
 
 	port := 5000
 	log.Default().Printf("start serving ::%d\n", port)
