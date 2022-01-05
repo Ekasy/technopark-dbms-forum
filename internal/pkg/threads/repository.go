@@ -6,4 +6,5 @@ type ThreadRepository interface {
 	InsertThread(thread *models.Thread) error
 	SelectThreadBySlug(slug string) (*models.Thread, error)
 	SelectThreadsByForum(tv *models.ThreadsVars) ([]*models.Thread, error)
+	SelectUsersByForum(tv *models.ThreadsVars) ([]*models.Thread, error)
 }

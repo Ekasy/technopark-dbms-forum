@@ -12,6 +12,10 @@ import (
 	thrdrepo "forum/internal/pkg/threads/repository"
 	thrdusec "forum/internal/pkg/threads/usecase"
 
+	postdeli "forum/internal/pkg/posts/delivery"
+	postrepo "forum/internal/pkg/posts/repository"
+	postusec "forum/internal/pkg/posts/usecase"
+
 	_ "github.com/jackc/pgx/stdlib"
 
 	userdeli "forum/internal/pkg/user/delivery"
@@ -42,12 +46,17 @@ func main() {
 	tu := thrdusec.NewThreadUsecase(tr)
 	td := thrddeli.NewForumDelivery(tu)
 
+	pr := postrepo.NewPostRepository(db)
+	pu := postusec.NewPostUsecase(pr)
+	pd := postdeli.NewPostDelivery(pu)
+
 	r := mux.NewRouter()
 	r = r.PathPrefix("/api").Subrouter()
 	r.Use(middleware.ContentTypeMiddleware)
 	ud.Routing(r)
 	fd.Routing(r)
 	td.Routing(r)
+	pd.Routing(r)
 
 	port := 5000
 	log.Default().Printf("start serving ::%d\n", port)

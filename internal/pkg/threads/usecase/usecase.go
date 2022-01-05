@@ -27,7 +27,10 @@ func (tu *ThreadUsecase) CreateThread(thread *models.Thread) (*models.Thread, er
 		return nil, myerr.ForumNotExist
 	case myerr.ThreadAlreadyExist:
 		thread, err = tu.repo.SelectThreadBySlug(thread.Slug)
-		return thread, err
+		if err != nil {
+			return nil, err
+		}
+		return thread, myerr.ThreadAlreadyExist
 	default:
 		return nil, err
 	}
@@ -35,5 +38,10 @@ func (tu *ThreadUsecase) CreateThread(thread *models.Thread) (*models.Thread, er
 
 func (tu *ThreadUsecase) GetThreadsByForum(tv *models.ThreadsVars) ([]*models.Thread, error) {
 	threads, err := tu.repo.SelectThreadsByForum(tv)
+	return threads, err
+}
+
+func (tu *ThreadUsecase) GetUsersByForum(tv *models.ThreadsVars) ([]*models.Thread, error) {
+	threads, err := tu.repo.SelectUsersByForum(tv)
 	return threads, err
 }

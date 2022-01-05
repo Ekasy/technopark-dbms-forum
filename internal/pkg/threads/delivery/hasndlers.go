@@ -25,6 +25,7 @@ func NewForumDelivery(threadUsecase threads.ThreadUsecase) *ThreadDelivery {
 func (td *ThreadDelivery) Routing(r *mux.Router) {
 	r.HandleFunc("/forum/{slug}/create", td.CreateThreadHandler).Methods(http.MethodPost, http.MethodOptions)
 	r.HandleFunc("/forum/{slug}/threads", td.GetThreadsHandler).Methods(http.MethodGet, http.MethodOptions)
+	r.HandleFunc("/forum/{slug}/users", td.GetUsersHandler).Methods(http.MethodGet, http.MethodOptions)
 }
 
 func (td *ThreadDelivery) CreateThreadHandler(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +71,24 @@ func (td *ThreadDelivery) GetThreadsHandler(w http.ResponseWriter, r *http.Reque
 	tv := models.NewThreadsVars(mux.Vars(r), query)
 
 	threads, err := td.threadUsecase.GetThreadsByForum(tv)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+		w.Write(models.ToBytes(threads))
+	case myerr.NoRows:
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("forum %s not exist", tv.ForumSlug)}))
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(models.ToBytes(models.Error{Message: err.Error()}))
+	}
+}
+
+func (td *ThreadDelivery) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	tv := models.NewThreadsVars(mux.Vars(r), query)
+
+	threads, err := td.threadUsecase.GetUsersByForum(tv)
 	switch err {
 	case nil:
 		w.WriteHeader(http.StatusOK)

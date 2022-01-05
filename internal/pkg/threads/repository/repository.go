@@ -30,6 +30,19 @@ func (tr *ThreadRepository) InsertThread(thread *models.Thread) error {
 		return myerr.InternalDbError
 	}
 
+	if len(thread.Slug) != 0 {
+		var s string
+		row := tx.QueryRow(`SELECT id FROM threads WHERE slug = $1`, thread.Slug)
+		err := row.Scan(&s)
+		if err == nil {
+			rollbackError := tx.Rollback()
+			if rollbackError != nil {
+				return myerr.RollbackError
+			}
+			return myerr.ThreadAlreadyExist
+		}
+	}
+
 	row := tx.QueryRow(
 		`INSERT INTO threads (title, message, slug, author, forum, created) 
 		 VALUES ($1, $2, $3,
@@ -144,4 +157,23 @@ func (tr *ThreadRepository) SelectThreadsByForum(tv *models.ThreadsVars) ([]*mod
 	}
 
 	return threads, nil
+}
+
+func (tr *ThreadRepository) SelectUsersByForum(tv *models.ThreadsVars) ([]*models.Thread, error) {
+	row := tr.db.QueryRow(
+		"SELECT slug FROM forum WHERE slug = $1",
+		tv.ForumSlug,
+	)
+	buf := ""
+	err := row.Scan(&buf)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.NoRows
+		}
+		tr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	return nil, nil
 }

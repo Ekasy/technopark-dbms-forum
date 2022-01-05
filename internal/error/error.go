@@ -77,4 +77,14 @@ var (
 		Code:    500,
 		Message: "thread with this slug not exist",
 	}
+
+	ThreadNotExists CustomError = CustomError{
+		Code:    500,
+		Message: "thread not exist",
+	}
+
+	ParentNotExist CustomError = CustomError{
+		Code:    500,
+		Message: "parent's post not exist",
+	}
 )
