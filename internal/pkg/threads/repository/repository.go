@@ -3,11 +3,13 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	myerr "forum/internal/error"
 	"forum/internal/models"
 	"forum/internal/pkg/threads"
 	"log"
 	"regexp"
+	"time"
 )
 
 type ThreadRepository struct {
@@ -87,4 +89,59 @@ func (tr *ThreadRepository) SelectThreadBySlug(slug string) (*models.Thread, err
 		return nil, myerr.InternalDbError
 	}
 	return thread, nil
+}
+
+func (tr *ThreadRepository) SelectThreadsByForum(tv *models.ThreadsVars) ([]*models.Thread, error) {
+	row := tr.db.QueryRow(
+		"SELECT slug FROM forum WHERE slug = $1",
+		tv.ForumSlug,
+	)
+	buf := ""
+	err := row.Scan(&buf)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.NoRows
+		}
+		tr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	queryStr := `
+					SELECT id, title, author, forum, message, votes, slug, created
+					FROM threads
+					WHERE forum LIKE $1 %s
+					ORDER BY created %s
+					LIMIT $2;
+				`
+	var rows *sql.Rows
+	if tv.Since != "" {
+		queryStr = fmt.Sprintf(queryStr, fmt.Sprintf(`AND created::timestamp %s $3::timestamp with time zone`, tv.Sign), tv.Sorting)
+		rows, err = tr.db.Query(queryStr, tv.ForumSlug, tv.Limit, tv.Since)
+	} else {
+		queryStr = fmt.Sprintf(queryStr, "", tv.Sorting)
+		rows, err = tr.db.Query(queryStr, tv.ForumSlug, tv.Limit)
+	}
+	if err != nil {
+		tr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	threads := make([]*models.Thread, 0)
+	for rows.Next() {
+		thread := &models.Thread{}
+		t := &time.Time{}
+		err = rows.Scan(
+			&thread.Id, &thread.Title, &thread.Author, &thread.Forum,
+			&thread.Message, &thread.Votes, &thread.Slug, &t)
+		if err != nil {
+			tr.logger.Println(err.Error())
+			return nil, myerr.InternalDbError
+		}
+
+		thread.Created = t.Format(models.Layout)
+		threads = append(threads, thread)
+	}
+
+	return threads, nil
 }

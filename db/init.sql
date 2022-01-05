@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS forum (
 
 CREATE TABLE IF NOT EXISTS threads (
     id          SERIAL          NOT NULL PRIMARY KEY,
-    slug        CITEXT          UNIQUE,
+    slug        CITEXT          DEFAULT '',
     title       TEXT            NOT NULL,
     author      CITEXT          NOT NULL,
     forum       CITEXT          NOT NULL,

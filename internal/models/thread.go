@@ -1,6 +1,8 @@
 package models
 
-import "time"
+import (
+	"time"
+)
 
 type Thread struct {
 	Id      int64  `json:"id"`
@@ -22,8 +24,12 @@ type ThreadInput struct {
 	Created string `json:"created"`
 }
 
+const (
+	Layout string = "2006-01-02T15:04:05.000-07:00"
+)
+
 func (ti *ThreadInput) ToThread(forumSlug string) *Thread {
-	dt := time.Now().Format("2006-01-02T15:03:05.527+00:00")
+	dt := time.Now().Format(Layout)
 	if ti.Created == "" {
 		ti.Created = dt
 	}

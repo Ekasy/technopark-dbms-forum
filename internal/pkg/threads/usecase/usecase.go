@@ -32,3 +32,8 @@ func (tu *ThreadUsecase) CreateThread(thread *models.Thread) (*models.Thread, er
 		return nil, err
 	}
 }
+
+func (tu *ThreadUsecase) GetThreadsByForum(tv *models.ThreadsVars) ([]*models.Thread, error) {
+	threads, err := tu.repo.SelectThreadsByForum(tv)
+	return threads, err
+}
