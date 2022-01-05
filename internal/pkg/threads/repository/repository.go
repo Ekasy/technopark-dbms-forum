@@ -30,19 +30,6 @@ func (tr *ThreadRepository) InsertThread(thread *models.Thread) error {
 		return myerr.InternalDbError
 	}
 
-	if len(thread.Slug) != 0 {
-		var s string
-		row := tx.QueryRow(`SELECT id FROM threads WHERE slug = $1`, thread.Slug)
-		err := row.Scan(&s)
-		if err == nil {
-			rollbackError := tx.Rollback()
-			if rollbackError != nil {
-				return myerr.RollbackError
-			}
-			return myerr.ThreadAlreadyExist
-		}
-	}
-
 	row := tx.QueryRow(
 		`INSERT INTO threads (title, message, slug, author, forum, created) 
 		 VALUES ($1, $2, $3,
@@ -62,6 +49,11 @@ func (tr *ThreadRepository) InsertThread(thread *models.Thread) error {
 		}
 
 		res, _ := regexp.Match(".*threads_pkey.*", []byte(err.Error()))
+		if res {
+			return myerr.ThreadAlreadyExist
+		}
+
+		res, _ = regexp.Match(".*pindex_threads_slug.*", []byte(err.Error()))
 		if res {
 			return myerr.ThreadAlreadyExist
 		}
