@@ -169,3 +169,21 @@ func (tr *ThreadRepository) SelectUsersByForum(tv *models.ThreadsVars) ([]*model
 
 	return nil, nil
 }
+
+func (tr *ThreadRepository) SelectThread(slug string, id int64) (*models.Thread, error) {
+	thread := &models.Thread{}
+	row := tr.db.QueryRow(
+		"SELECT id, title, author, forum, message, votes, slug, created from threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1",
+		id, slug,
+	)
+	err := row.Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Forum, &thread.Message, &thread.Votes, &thread.Slug, &thread.Created)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.ThreadNotExists
+		}
+		tr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+	return thread, nil
+}

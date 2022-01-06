@@ -8,6 +8,7 @@ import (
 	"forum/internal/pkg/threads"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -26,6 +27,7 @@ func (td *ThreadDelivery) Routing(r *mux.Router) {
 	r.HandleFunc("/forum/{slug}/create", td.CreateThreadHandler).Methods(http.MethodPost, http.MethodOptions)
 	r.HandleFunc("/forum/{slug}/threads", td.GetThreadsHandler).Methods(http.MethodGet, http.MethodOptions)
 	r.HandleFunc("/forum/{slug}/users", td.GetUsersHandler).Methods(http.MethodGet, http.MethodOptions)
+	r.HandleFunc("/thread/{slug_or_id}/details", td.GetThreadHandler).Methods(http.MethodGet, http.MethodOptions)
 }
 
 func (td *ThreadDelivery) CreateThreadHandler(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +98,29 @@ func (td *ThreadDelivery) GetUsersHandler(w http.ResponseWriter, r *http.Request
 	case myerr.NoRows:
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("forum %s not exist", tv.ForumSlug)}))
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(models.ToBytes(models.Error{Message: err.Error()}))
+	}
+}
+
+func (td *ThreadDelivery) GetThreadHandler(w http.ResponseWriter, r *http.Request) {
+	slug := mux.Vars(r)["slug_or_id"]
+	id, err := strconv.ParseInt(slug, 10, 64)
+	if err == nil {
+		slug = ""
+	} else {
+		id = 0
+	}
+
+	thread, err := td.threadUsecase.GetThread(slug, id)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+		w.Write(models.ToBytes(thread))
+	case myerr.ThreadNotExists:
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("thread with {id: %d, slug: '%s'} not exist", id, slug)}))
 	default:
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(models.ToBytes(models.Error{Message: err.Error()}))

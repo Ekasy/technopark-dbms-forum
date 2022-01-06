@@ -66,7 +66,7 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 		queryStr = fmt.Sprintf(queryStr, "", "")
 		row = tx.QueryRow(queryStr, inputPost.Message, forumSlug, threadId, dt, inputPost.Author)
 	} else {
-		queryStr = fmt.Sprintf(queryStr, ", parent", ", COALESCE((SELECT nickname FROM users WHERE nickname = $6), $6)")
+		queryStr = fmt.Sprintf(queryStr, ", parent", ", COALESCE((SELECT id FROM posts WHERE id = $6), $6)")
 		row = tx.QueryRow(queryStr, inputPost.Message, forumSlug, threadId, dt, inputPost.Author, inputPost.Parent)
 	}
 

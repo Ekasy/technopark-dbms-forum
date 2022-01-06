@@ -45,3 +45,8 @@ func (tu *ThreadUsecase) GetUsersByForum(tv *models.ThreadsVars) ([]*models.Thre
 	threads, err := tu.repo.SelectUsersByForum(tv)
 	return threads, err
 }
+
+func (tu *ThreadUsecase) GetThread(slug string, id int64) (*models.Thread, error) {
+	thread, err := tu.repo.SelectThread(slug, id)
+	return thread, err
+}
