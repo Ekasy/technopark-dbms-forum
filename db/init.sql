@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS threads (
     FOREIGN KEY (forum) REFERENCES forum (slug)
 );
 
-CREATE UNIQUE INDEX pindex_threads_slug ON threads(slug) WHERE TRIM(slug) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS pindex_threads_slug ON threads(slug) WHERE TRIM(slug) <> '';
 
 CREATE TABLE IF NOT EXISTS posts (
     id          BIGSERIAL                   NOT NULL PRIMARY KEY,
@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS posts (
     forum       CITEXT                      NOT NULL,
     thread      INTEGER                     NOT NULL,
     created     TIMESTAMP WITH TIME ZONE    NOT NULL DEFAULT NOW(),
+    path        BIGINT ARRAY,
+    parentRoot  BIGINT,
     FOREIGN KEY (author) REFERENCES users (nickname),
     FOREIGN KEY (forum) REFERENCES forum (slug),
     FOREIGN KEY (thread) REFERENCES threads (id)
@@ -93,3 +95,38 @@ $vote_update$ LANGUAGE  plpgsql;
 
 DROP TRIGGER IF EXISTS vote_update ON votes;
 CREATE TRIGGER vote_update AFTER UPDATE ON votes FOR EACH ROW EXECUTE PROCEDURE vote_update();
+
+
+CREATE OR REPLACE FUNCTION update_path() RETURNS TRIGGER AS $update_path$
+BEGIN
+    IF NEW.parent = 0
+    THEN
+    
+        UPDATE posts
+        SET path = ARRAY [NEW.id]
+        WHERE id = NEW.id;
+    
+    ELSE
+    
+        WITH parentPost AS (
+            SELECT path
+            FROM posts
+            WHERE id = NEW.parent
+        )
+        
+        UPDATE posts SET
+            path = array_append(
+                (SELECT path FROM parentPost), 
+                NEW.id
+            )
+        WHERE id = NEW.id;
+
+    END IF;
+
+    RETURN NULL;
+END;
+$update_path$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_path ON posts;
+
+CREATE TRIGGER update_path AFTER INSERT ON posts FOR EACH ROW EXECUTE PROCEDURE update_path();

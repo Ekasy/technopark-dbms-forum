@@ -44,3 +44,14 @@ func (pu *PostUsecase) CreatePostsBySlugOrId(slug string, id int64, postsInput [
 
 	return posts, nil
 }
+
+func (pu *PostUsecase) GetPostsRec(tq *models.ThreadsQuery) ([]*models.Post, error) {
+	id, err := pu.repo.SelectThread(tq.ThreadId, tq.ThreadSlug)
+	if err != nil {
+		return nil, err
+	}
+
+	tq.ThreadId = id
+	posts, err := pu.repo.SelectThreadsBySort(tq)
+	return posts, err
+}

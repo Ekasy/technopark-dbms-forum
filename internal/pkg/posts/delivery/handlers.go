@@ -25,6 +25,7 @@ func NewPostDelivery(postUsecase posts.PostUsecase) *PostDelivery {
 
 func (pd *PostDelivery) Routing(r *mux.Router) {
 	r.HandleFunc("/thread/{slug_or_id}/create", pd.CreatePostHandler).Methods(http.MethodPost, http.MethodOptions)
+	r.HandleFunc("/thread/{slug_or_id}/posts", pd.GetPostsByThreadHandler).Methods(http.MethodGet, http.MethodOptions)
 }
 
 func (pd *PostDelivery) CreatePostHandler(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +61,22 @@ func (pd *PostDelivery) CreatePostHandler(w http.ResponseWriter, r *http.Request
 	case myerr.ParentNotExist:
 		w.WriteHeader(http.StatusConflict)
 		w.Write(models.ToBytes(models.Error{Message: "one parent not found"}))
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(models.ToBytes(models.Error{Message: err.Error()}))
+	}
+}
+
+func (pd *PostDelivery) GetPostsByThreadHandler(w http.ResponseWriter, r *http.Request) {
+	tq := models.NewThreadQuery(mux.Vars(r), r.URL.Query())
+	posts, err := pd.postUsecase.GetPostsRec(tq)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+		w.Write(models.ToBytes(posts))
+	case myerr.ThreadNotExists:
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("thread {slug: '%s', id: %d} not found", tq.ThreadSlug, tq.ThreadId)}))
 	default:
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(models.ToBytes(models.Error{Message: err.Error()}))

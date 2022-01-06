@@ -93,3 +93,92 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 	}
 	return post, nil
 }
+
+func (pr *PostRepository) SelectThread(id int64, slug string) (int64, error) {
+	row := pr.db.QueryRow(
+		"SELECT id from threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1",
+		id, slug)
+	err := row.Scan(&id)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return 0, myerr.ThreadNotExists
+		}
+		return 0, myerr.InternalDbError
+	}
+	return id, nil
+}
+
+func (pr *PostRepository) SelectThreadsBySort(tq *models.ThreadsQuery) ([]*models.Post, error) {
+	var queryStr string
+	var counter uint = 2
+	var nums []interface{}
+	var args []interface{}
+	if tq.Sort == "flat" {
+		queryStr = `SELECT t1.id, t1.message, t1.forum, t1.thread, t1.created, t1.author, t1.parent, t1.isEdited 
+					FROM (SELECT * FROM posts WHERE thread = $1 `
+		args = append(args, tq.ThreadId)
+		if tq.Since != 0 {
+			queryStr = queryStr + "AND id %s $%d"
+			nums = append(nums, tq.Sign, counter)
+			counter = counter + 1
+			args = append(args, tq.Since)
+		}
+		queryStr = queryStr + ") as t1 "
+		queryStr = queryStr + "ORDER BY t1.created %s, t1.id %s LIMIT $%d"
+		nums = append(nums, tq.Sorting, tq.Sorting, counter)
+		args = append(args, tq.Limit)
+		queryStr = fmt.Sprintf(queryStr, nums...)
+	} else if tq.Sort == "tree" {
+		queryStr = `SELECT id, message, forum, thread, created, author, parent, isEdited 
+					FROM posts WHERE thread = $1 `
+		args = append(args, tq.ThreadId)
+		if tq.Since != 0 {
+			queryStr = queryStr + "AND path %s (SELECT path FROM posts WHERE id = $%d) "
+			nums = append(nums, tq.Sign, counter)
+			counter = counter + 1
+			args = append(args, tq.Since)
+		}
+		queryStr = queryStr + "ORDER BY path %s LIMIT $%d"
+		nums = append(nums, tq.Sorting, counter)
+		args = append(args, tq.Limit)
+		queryStr = fmt.Sprintf(queryStr, nums...)
+	} else if tq.Sort == "parent_tree" {
+		queryStr = `SELECT id, message, forum, thread, created, author, parent, isEdited 
+					FROM posts WHERE path[1] IN (
+						SELECT id FROM posts
+						WHERE thread = $1 AND parent = 0 %s
+						ORDER BY id %s
+						LIMIT $%d
+					) AND thread = $1
+					ORDER BY path[1] %s, path`
+		args = append(args, tq.ThreadId)
+		s1 := ""
+		if tq.Since != 0 {
+			s1 = "AND id %s (SELECT path[1] FROM posts WHERE id = $%d)"
+			s1 = fmt.Sprintf(s1, tq.Sign, counter)
+			counter = counter + 1
+			args = append(args, tq.Since)
+		}
+		args = append(args, tq.Limit)
+		queryStr = fmt.Sprintf(queryStr, s1, tq.Sorting, counter, tq.Sorting)
+	}
+
+	rows, err := pr.db.Query(queryStr, args...)
+	if err != nil {
+		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	posts := make([]*models.Post, 0)
+	for rows.Next() {
+		post := &models.Post{}
+		err = rows.Scan(&post.Id, &post.Message, &post.Forum, &post.Thread, &post.Created, &post.Author, &post.Parent, &post.IsEdited)
+		if err != nil {
+			pr.logger.Println(err.Error())
+			return nil, myerr.InternalDbError
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
