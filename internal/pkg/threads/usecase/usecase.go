@@ -50,3 +50,8 @@ func (tu *ThreadUsecase) GetThread(slug string, id int64) (*models.Thread, error
 	thread, err := tu.repo.SelectThread(slug, id)
 	return thread, err
 }
+
+func (tu *ThreadUsecase) UpdateThread(threadUpdate *models.ThreadUpdate) (*models.Thread, error) {
+	thread, err := tu.repo.UpdateThread(threadUpdate)
+	return thread, err
+}

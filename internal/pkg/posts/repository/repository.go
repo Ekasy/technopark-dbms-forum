@@ -115,17 +115,16 @@ func (pr *PostRepository) SelectThreadsBySort(tq *models.ThreadsQuery) ([]*model
 	var nums []interface{}
 	var args []interface{}
 	if tq.Sort == "flat" {
-		queryStr = `SELECT t1.id, t1.message, t1.forum, t1.thread, t1.created, t1.author, t1.parent, t1.isEdited 
-					FROM (SELECT * FROM posts WHERE thread = $1 `
+		queryStr = `SELECT id, message, forum, thread, created, author, parent, isEdited 
+					FROM posts WHERE thread = $1 `
 		args = append(args, tq.ThreadId)
 		if tq.Since != 0 {
-			queryStr = queryStr + "AND id %s $%d"
+			queryStr = queryStr + "AND id %s $%d "
 			nums = append(nums, tq.Sign, counter)
 			counter = counter + 1
 			args = append(args, tq.Since)
 		}
-		queryStr = queryStr + ") as t1 "
-		queryStr = queryStr + "ORDER BY t1.created %s, t1.id %s LIMIT $%d"
+		queryStr = queryStr + "ORDER BY created %s, id %s LIMIT $%d"
 		nums = append(nums, tq.Sorting, tq.Sorting, counter)
 		args = append(args, tq.Limit)
 		queryStr = fmt.Sprintf(queryStr, nums...)

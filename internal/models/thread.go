@@ -42,3 +42,10 @@ func (ti *ThreadInput) ToThread(forumSlug string) *Thread {
 		Created: ti.Created,
 	}
 }
+
+type ThreadUpdate struct {
+	Id      int64
+	Slug    string
+	Message string `json:"message"`
+	Title   string `json:"title"`
+}

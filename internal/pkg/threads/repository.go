@@ -8,4 +8,5 @@ type ThreadRepository interface {
 	SelectThreadsByForum(tv *models.ThreadsVars) ([]*models.Thread, error)
 	SelectUsersByForum(tv *models.ThreadsVars) ([]*models.Thread, error)
 	SelectThread(slug string, id int64) (*models.Thread, error)
+	UpdateThread(threadUpdate *models.ThreadUpdate) (*models.Thread, error)
 }

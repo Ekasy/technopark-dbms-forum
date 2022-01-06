@@ -28,6 +28,7 @@ func (td *ThreadDelivery) Routing(r *mux.Router) {
 	r.HandleFunc("/forum/{slug}/threads", td.GetThreadsHandler).Methods(http.MethodGet, http.MethodOptions)
 	r.HandleFunc("/forum/{slug}/users", td.GetUsersHandler).Methods(http.MethodGet, http.MethodOptions)
 	r.HandleFunc("/thread/{slug_or_id}/details", td.GetThreadHandler).Methods(http.MethodGet, http.MethodOptions)
+	r.HandleFunc("/thread/{slug_or_id}/details", td.UpdateThreadHandler).Methods(http.MethodPost, http.MethodOptions)
 }
 
 func (td *ThreadDelivery) CreateThreadHandler(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +115,47 @@ func (td *ThreadDelivery) GetThreadHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	thread, err := td.threadUsecase.GetThread(slug, id)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+		w.Write(models.ToBytes(thread))
+	case myerr.ThreadNotExists:
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("thread with {id: %d, slug: '%s'} not exist", id, slug)}))
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(models.ToBytes(models.Error{Message: err.Error()}))
+	}
+}
+
+func (td *ThreadDelivery) UpdateThreadHandler(w http.ResponseWriter, r *http.Request) {
+	slug := mux.Vars(r)["slug_or_id"]
+	id, err := strconv.ParseInt(slug, 10, 64)
+	if err == nil {
+		slug = ""
+	} else {
+		id = 0
+	}
+
+	thredUpdate := &models.ThreadUpdate{}
+	defer r.Body.Close()
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(models.ToBytes(models.Error{Message: "invalid body 1"}))
+		return
+	}
+
+	err = json.Unmarshal(buf, &thredUpdate)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(models.ToBytes(models.Error{Message: "invalid body 2"}))
+		return
+	}
+
+	thredUpdate.Id = id
+	thredUpdate.Slug = slug
+	thread, err := td.threadUsecase.UpdateThread(thredUpdate)
 	switch err {
 	case nil:
 		w.WriteHeader(http.StatusOK)

@@ -187,3 +187,41 @@ func (tr *ThreadRepository) SelectThread(slug string, id int64) (*models.Thread,
 	}
 	return thread, nil
 }
+
+func (tr *ThreadRepository) UpdateThread(threadUpdate *models.ThreadUpdate) (*models.Thread, error) {
+	tx, err := tr.db.BeginTx(context.Background(), &sql.TxOptions{})
+	if err != nil {
+		return nil, myerr.InternalDbError
+	}
+
+	thread := &models.Thread{}
+	row := tx.QueryRow(
+		`UPDATE threads SET 
+			title = $1, 
+			message = $2 
+		 WHERE id = (SELECT id from threads WHERE 0 = $3 AND slug LIKE $4 OR $4 LIKE '' AND id = $3)
+		 RETURNING id, title, author, forum, message, votes, slug, created;`,
+		threadUpdate.Title, threadUpdate.Message, threadUpdate.Id, threadUpdate.Slug)
+
+	err = row.Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Forum, &thread.Message, &thread.Votes, &thread.Slug, &thread.Created)
+	if err != nil {
+		rollbackError := tx.Rollback()
+		if rollbackError != nil {
+			return nil, myerr.RollbackError
+		}
+
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.ThreadNotExists
+		}
+
+		tr.logger.Printf(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, myerr.CommitError
+	}
+	return thread, nil
+}
