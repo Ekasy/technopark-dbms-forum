@@ -1,6 +1,7 @@
 package models
 
 import (
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -142,4 +143,29 @@ func NewForumUsersQuery(vars map[string]string, query url.Values) *ForumUsersQue
 	}
 
 	return tv
+}
+
+type PostQuery struct {
+	PostId  int64
+	Related []string
+}
+
+func NewPostQuery(vars map[string]string, r *http.Request) *PostQuery {
+	pq := &PostQuery{
+		PostId:  0,
+		Related: make([]string, 0),
+	}
+
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
+	if err == nil {
+		pq.PostId = id
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		return pq
+	}
+
+	pq.Related = r.Form["related"]
+	return pq
 }

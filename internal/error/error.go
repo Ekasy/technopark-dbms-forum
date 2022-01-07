@@ -87,4 +87,9 @@ var (
 		Code:    500,
 		Message: "parent's post not exist",
 	}
+
+	PostNotExist CustomError = CustomError{
+		Code:    500,
+		Message: "post not exist",
+	}
 )

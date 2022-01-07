@@ -20,3 +20,8 @@ type PostInput struct {
 type PostsInput struct {
 	PI []*PostInput
 }
+
+type PostUpdate struct {
+	Id      int64
+	Message string `json:"message"`
+}

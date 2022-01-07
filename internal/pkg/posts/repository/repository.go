@@ -24,16 +24,8 @@ func NewPostRepository(db *sql.DB) posts.PostRepository {
 }
 
 func (pr *PostRepository) SelectFormSlugByThread(slug string, id int64) (string, int64, error) {
-	var queryStr string
-	var row *sql.Row
-	if len(slug) == 0 {
-		queryStr = "SELECT forum, id FROM threads WHERE id = $1;"
-		row = pr.db.QueryRow(queryStr, id)
-	} else {
-		queryStr = "SELECT forum, id FROM threads WHERE slug = $1;"
-		row = pr.db.QueryRow(queryStr, slug)
-	}
-
+	queryStr := "SELECT forum, id FROM threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1"
+	row := pr.db.QueryRow(queryStr, id, slug)
 	var forumSlug string
 	var threadId int64
 	err := row.Scan(&forumSlug, &threadId)
@@ -66,7 +58,10 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 		queryStr = fmt.Sprintf(queryStr, "", "")
 		row = tx.QueryRow(queryStr, inputPost.Message, forumSlug, threadId, dt, inputPost.Author)
 	} else {
-		queryStr = fmt.Sprintf(queryStr, ", parent", ", COALESCE((SELECT id FROM posts WHERE id = $6), $6)")
+		queryStr = fmt.Sprintf(
+			queryStr,
+			", parent",
+			", (SELECT (CASE WHEN EXISTS (SELECT id FROM posts WHERE id = $6 AND thread = $3) THEN $6 ELSE NULL END))")
 		row = tx.QueryRow(queryStr, inputPost.Message, forumSlug, threadId, dt, inputPost.Author, inputPost.Parent)
 	}
 
@@ -77,10 +72,15 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 		if rollbackError != nil {
 			return nil, myerr.RollbackError
 		}
-		fmt.Println(err.Error())
-		res, _ := regexp.Match(".*posts_parent_fkey.*", []byte(err.Error()))
+
+		res, _ := regexp.Match(".*null value in column \"parent\" violates not-null constraint.*", []byte(err.Error()))
 		if res {
 			return nil, myerr.ParentNotExist
+		}
+
+		res, _ = regexp.Match(".*foreign key constraint \"posts_author_fkey\".*", []byte(err.Error()))
+		if res {
+			return nil, myerr.UserNotExist
 		}
 
 		pr.logger.Println(err.Error())
@@ -180,4 +180,102 @@ func (pr *PostRepository) SelectThreadsBySort(tq *models.ThreadsQuery) ([]*model
 		posts = append(posts, post)
 	}
 	return posts, nil
+}
+
+func (pr *PostRepository) SelectPost(id int64) (*models.Post, error) {
+	post := &models.Post{}
+	row := pr.db.QueryRow(
+		"SELECT id, parent, author, message, isEdited, forum, thread, created FROM posts WHERE id = $1;",
+		id)
+	err := row.Scan(&post.Id, &post.Parent, &post.Author, &post.Message, &post.IsEdited, &post.Forum, &post.Thread, &post.Created)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.PostNotExist
+		}
+		return nil, myerr.InternalDbError
+	}
+	return post, nil
+}
+
+func (pr *PostRepository) SelectUser(nickname string) (*models.User, error) {
+	user := &models.User{}
+	row := pr.db.QueryRow(
+		"SELECT nickname, fullname, email, about FROM users WHERE nickname LIKE $1;",
+		nickname)
+	err := row.Scan(&user.Nickname, &user.Fullname, &user.Email, &user.About)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.UserNotExist
+		}
+		return nil, myerr.InternalDbError
+	}
+	return user, nil
+}
+
+func (pr *PostRepository) SelectThreadById(id int64) (*models.Thread, error) {
+	thread := &models.Thread{}
+	row := pr.db.QueryRow(
+		"SELECT id, slug, title, author, forum, message, votes, created FROM threads WHERE id = $1;",
+		id)
+	err := row.Scan(&thread.Id, &thread.Slug, &thread.Title, &thread.Author, &thread.Forum, &thread.Message, &thread.Votes, &thread.Created)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.ThreadNotExists
+		}
+		return nil, myerr.InternalDbError
+	}
+	return thread, nil
+}
+
+func (pr *PostRepository) SelectForum(slug string) (*models.Forum, error) {
+	forum := &models.Forum{}
+	row := pr.db.QueryRow(
+		"SELECT slug, title, author, posts, threads WHERE slug = $1;",
+		slug)
+	err := row.Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Posts, &forum.Threads)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.ForumNotExist
+		}
+		return nil, myerr.InternalDbError
+	}
+	return forum, nil
+}
+
+func (pr *PostRepository) UpdatePost(postupdate *models.PostUpdate) (*models.Post, error) {
+	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
+	if err != nil {
+		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	post := &models.Post{}
+	row := tx.QueryRow(
+		`UPDATE posts SET message = $2, isEdited = $3 WHERE id = $1
+		 RETURNING id, parent, author, message, isEdited, forum, thread, created;`,
+		postupdate.Id, postupdate.Message, true)
+	err = row.Scan(&post.Id, &post.Parent, &post.Author, &post.Message, &post.IsEdited, &post.Forum, &post.Thread, &post.Created)
+	if err != nil {
+		rollbackError := tx.Rollback()
+		if rollbackError != nil {
+			return nil, myerr.RollbackError
+		}
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return nil, myerr.PostNotExist
+		}
+
+		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, myerr.CommitError
+	}
+	return post, nil
 }
