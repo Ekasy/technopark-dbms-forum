@@ -24,7 +24,7 @@ func NewVoteRepository(db *sql.DB) votes.VoteRepository {
 
 func (vr *VoteRepository) SelectThread(vote *models.Vote) (int64, error) {
 	row := vr.db.QueryRow(
-		"SELECT id from threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1",
+		"SELECT id from threads WHERE 0 = $1 AND slug = $2 OR $2 = '' AND id = $1",
 		vote.ThreadId, vote.ThreadSlug)
 	err := row.Scan(&vote.ThreadId)
 	if err != nil {
@@ -53,6 +53,12 @@ func (vr *VoteRepository) UpdateVote(vote *models.Vote) (*models.Thread, error) 
 		if rollbackError != nil {
 			return nil, myerr.RollbackError
 		}
+
+		res, _ := regexp.Match(".*foreign key constraint \"votes_nickname_fkey\".*", []byte(err.Error()))
+		if res {
+			return nil, myerr.UserNotExist
+		}
+
 		vr.logger.Println(err.Error())
 		return nil, myerr.InternalDbError
 	}
@@ -75,6 +81,12 @@ func (vr *VoteRepository) UpdateVote(vote *models.Vote) (*models.Thread, error) 
 			if rollbackError != nil {
 				return nil, myerr.RollbackError
 			}
+
+			res, _ := regexp.Match(".*foreign key constraint \"votes_nickname_fkey\".*", []byte(err.Error()))
+			if res {
+				return nil, myerr.UserNotExist
+			}
+
 			vr.logger.Println(err.Error())
 			return nil, myerr.InternalDbError
 		}

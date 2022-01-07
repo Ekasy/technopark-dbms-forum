@@ -90,7 +90,7 @@ func (fr *ForumRepository) SelectUsers(fv *models.ForumUsersQuery) ([]*models.Us
 	queryStr := `
 					SELECT nickname, fullname, about, email
 					FROM forum_users
-					WHERE forum LIKE $1 %s
+					WHERE forum = $1 %s
 					ORDER BY nickname %s
 					LIMIT $2;
 				`

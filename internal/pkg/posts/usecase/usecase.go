@@ -73,7 +73,7 @@ func (pu *PostUsecase) GetInfo(pq *models.PostQuery) (map[string]interface{}, er
 			if err != nil {
 				return nil, err
 			}
-			info["user"] = user
+			info["author"] = user
 		case "forum":
 			forum, err := pu.repo.SelectForum(post.Forum)
 			if err != nil {

@@ -24,7 +24,7 @@ func NewPostRepository(db *sql.DB) posts.PostRepository {
 }
 
 func (pr *PostRepository) SelectFormSlugByThread(slug string, id int64) (string, int64, error) {
-	queryStr := "SELECT forum, id FROM threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1"
+	queryStr := "SELECT forum, id FROM threads WHERE 0 = $1 AND slug = $2 OR $2 = '' AND id = $1"
 	row := pr.db.QueryRow(queryStr, id, slug)
 	var forumSlug string
 	var threadId int64
@@ -96,7 +96,7 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 
 func (pr *PostRepository) SelectThread(id int64, slug string) (int64, error) {
 	row := pr.db.QueryRow(
-		"SELECT id from threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1",
+		"SELECT id from threads WHERE 0 = $1 AND slug = $2 OR $2 = '' AND id = $1",
 		id, slug)
 	err := row.Scan(&id)
 	if err != nil {
@@ -201,7 +201,7 @@ func (pr *PostRepository) SelectPost(id int64) (*models.Post, error) {
 func (pr *PostRepository) SelectUser(nickname string) (*models.User, error) {
 	user := &models.User{}
 	row := pr.db.QueryRow(
-		"SELECT nickname, fullname, email, about FROM users WHERE nickname LIKE $1;",
+		"SELECT nickname, fullname, email, about FROM users WHERE nickname = $1;",
 		nickname)
 	err := row.Scan(&user.Nickname, &user.Fullname, &user.Email, &user.About)
 	if err != nil {
@@ -233,7 +233,7 @@ func (pr *PostRepository) SelectThreadById(id int64) (*models.Thread, error) {
 func (pr *PostRepository) SelectForum(slug string) (*models.Forum, error) {
 	forum := &models.Forum{}
 	row := pr.db.QueryRow(
-		"SELECT slug, title, author, posts, threads WHERE slug = $1;",
+		"SELECT slug, title, author, posts, threads FROM forum WHERE slug = $1;",
 		slug)
 	err := row.Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Posts, &forum.Threads)
 	if err != nil {
@@ -255,7 +255,10 @@ func (pr *PostRepository) UpdatePost(postupdate *models.PostUpdate) (*models.Pos
 
 	post := &models.Post{}
 	row := tx.QueryRow(
-		`UPDATE posts SET message = $2, isEdited = $3 WHERE id = $1
+		`UPDATE posts SET 
+		 	message = CASE WHEN $2 = '' THEN message ELSE $2 END, 
+			isEdited = CASE WHEN $2 = '' THEN isEdited ELSE CASE WHEN message = $2 THEN isEdited ELSE $3 END END 
+		 WHERE id = $1
 		 RETURNING id, parent, author, message, isEdited, forum, thread, created;`,
 		postupdate.Id, postupdate.Message, true)
 	err = row.Scan(&post.Id, &post.Parent, &post.Author, &post.Message, &post.IsEdited, &post.Forum, &post.Thread, &post.Created)

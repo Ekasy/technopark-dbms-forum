@@ -60,6 +60,9 @@ func (vd *VoteDelivery) UpdateVoteHandler(w http.ResponseWriter, r *http.Request
 	case myerr.ThreadNotExists:
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("thread {slug: %s, id: %d} not found", vote.ThreadSlug, vote.ThreadId)}))
+	case myerr.UserNotExist:
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("user %s not found", vote.Nickname)}))
 	default:
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(models.ToBytes(models.Error{Message: err.Error()}))

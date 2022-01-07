@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 type ThreadsVars struct {
@@ -161,11 +162,18 @@ func NewPostQuery(vars map[string]string, r *http.Request) *PostQuery {
 		pq.PostId = id
 	}
 
-	err = r.ParseForm()
-	if err != nil {
-		return pq
+	related := r.URL.RawQuery
+	if strings.Contains(related, "user") {
+		pq.Related = append(pq.Related, "user")
 	}
 
-	pq.Related = r.Form["related"]
+	if strings.Contains(related, "forum") {
+		pq.Related = append(pq.Related, "forum")
+	}
+
+	if strings.Contains(related, "thread") {
+		pq.Related = append(pq.Related, "thread")
+	}
+
 	return pq
 }

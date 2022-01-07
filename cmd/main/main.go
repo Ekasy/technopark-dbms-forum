@@ -16,6 +16,10 @@ import (
 	postrepo "forum/internal/pkg/posts/repository"
 	postusec "forum/internal/pkg/posts/usecase"
 
+	srvcdeli "forum/internal/pkg/service/delivery"
+	srvcrepo "forum/internal/pkg/service/repository"
+	srvcusec "forum/internal/pkg/service/usecase"
+
 	_ "github.com/jackc/pgx/stdlib"
 
 	userdeli "forum/internal/pkg/user/delivery"
@@ -58,6 +62,10 @@ func main() {
 	vu := voteusec.NewVoteUsecase(vr)
 	vd := votedeli.NewVoteDelivery(vu)
 
+	sr := srvcrepo.NewServiceRepository(db)
+	su := srvcusec.NewServiceUsecase(sr)
+	sd := srvcdeli.NewServiceDelivery(su)
+
 	r := mux.NewRouter()
 	r = r.PathPrefix("/api").Subrouter()
 	r.Use(middleware.ContentTypeMiddleware)
@@ -66,6 +74,7 @@ func main() {
 	td.Routing(r)
 	pd.Routing(r)
 	vd.Routing(r)
+	sd.Routing(r)
 
 	port := 5000
 	log.Default().Printf("start serving ::%d\n", port)

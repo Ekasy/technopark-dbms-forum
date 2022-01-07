@@ -115,7 +115,7 @@ func (tr *ThreadRepository) SelectThreadsByForum(tv *models.ThreadsVars) ([]*mod
 	queryStr := `
 					SELECT id, title, author, forum, message, votes, slug, created
 					FROM threads
-					WHERE forum LIKE $1 %s
+					WHERE forum = $1 %s
 					ORDER BY created %s
 					LIMIT $2;
 				`
@@ -173,7 +173,7 @@ func (tr *ThreadRepository) SelectUsersByForum(tv *models.ThreadsVars) ([]*model
 func (tr *ThreadRepository) SelectThread(slug string, id int64) (*models.Thread, error) {
 	thread := &models.Thread{}
 	row := tr.db.QueryRow(
-		"SELECT id, title, author, forum, message, votes, slug, created from threads WHERE 0 = $1 AND slug LIKE $2 OR $2 LIKE '' AND id = $1",
+		"SELECT id, title, author, forum, message, votes, slug, created from threads WHERE 0 = $1 AND slug = $2 OR $2 = '' AND id = $1",
 		id, slug,
 	)
 	err := row.Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Forum, &thread.Message, &thread.Votes, &thread.Slug, &thread.Created)
@@ -197,9 +197,9 @@ func (tr *ThreadRepository) UpdateThread(threadUpdate *models.ThreadUpdate) (*mo
 	thread := &models.Thread{}
 	row := tx.QueryRow(
 		`UPDATE threads SET 
-			title = $1, 
-			message = $2 
-		 WHERE id = (SELECT id from threads WHERE 0 = $3 AND slug LIKE $4 OR $4 LIKE '' AND id = $3)
+			title = CASE WHEN $1 = '' THEN title ELSE $1 END, 
+			message = CASE WHEN $2 = '' THEN message ELSE $2 END 
+		 WHERE id = (SELECT id from threads WHERE 0 = $3 AND slug = $4 OR $4 = '' AND id = $3)
 		 RETURNING id, title, author, forum, message, votes, slug, created;`,
 		threadUpdate.Title, threadUpdate.Message, threadUpdate.Id, threadUpdate.Slug)
 
