@@ -1,9 +1,10 @@
 -- clear tables
--- DROP TABLE IF EXISTS users CASCADE;
--- DROP TABLE IF EXISTS forum CASCADE;
--- DROP TABLE IF EXISTS threads CASCADE;
--- DROP TABLE IF EXISTS posts CASCADE;
--- DROP TABLE IF EXISTS votes CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS forum CASCADE;
+DROP TABLE IF EXISTS threads CASCADE;
+DROP TABLE IF EXISTS posts CASCADE;
+DROP TABLE IF EXISTS votes CASCADE;
+DROP TABLE IF EXISTS forum_users CASCADE;
 
 -- install module with case-insensitive string
 CREATE EXTENSION IF NOT EXISTS citext;
@@ -13,11 +14,11 @@ CREATE EXTENSION IF NOT EXISTS citext;
 ----- БЛОК ТАБЛИЦ -----
 -----------------------
 CREATE TABLE IF NOT EXISTS users (
-    id          SERIAL       UNIQUE,
-    nickname    CITEXT       NOT NULL PRIMARY KEY,
-    fullname    TEXT         NOT NULL,
-    email       CITEXT       NOT NULL UNIQUE,
-    about       TEXT         NOT NULL DEFAULT ''
+    id          SERIAL              UNIQUE,
+    nickname    CITEXT COLLATE "C"  NOT NULL PRIMARY KEY,
+    fullname    TEXT                NOT NULL,
+    email       CITEXT              NOT NULL UNIQUE,
+    about       TEXT                NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS forum (
@@ -65,6 +66,17 @@ CREATE TABLE IF NOT EXISTS votes (
   	voice     	INT		NOT NULL,
 	FOREIGN KEY (nickname) REFERENCES users(nickname),
 	FOREIGN KEY (thread) REFERENCES threads(id)
+);
+
+CREATE TABLE IF NOT EXISTS forum_users (
+    nickname    CITEXT COLLATE "C"  NOT NULL,
+    fullname    TEXT                NOT NULL,
+    email       CITEXT              NOT NULL,
+    about       TEXT                NOT NULL DEFAULT '',
+    forum       CITEXT              NOT NULL,
+    FOREIGN KEY (nickname) REFERENCES users (nickname),
+    FOREIGN KEY (forum) REFERENCES forum (slug),
+	PRIMARY KEY (nickname, forum)
 );
 
 
@@ -168,3 +180,37 @@ $increment_threads_count$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS increment_threads_count ON threads;
 CREATE TRIGGER increment_threads_count AFTER INSERT ON threads FOR EACH ROW EXECUTE PROCEDURE increment_threads_count();
+
+
+-- создание поста -> вставка юзера в forum_users
+CREATE OR REPLACE FUNCTION post_paste_forum_user() RETURNS TRIGGER AS $post_paste_forum_user$
+BEGIN
+    INSERT INTO forum_users
+    SELECT nickname, fullname, email, about, NEW.forum as forum 
+    FROM users
+    WHERE nickname = NEW.author
+	ON CONFLICT DO NOTHING;
+    
+    RETURN NULL;
+END;
+$post_paste_forum_user$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS post_paste_forum_user ON posts;
+CREATE TRIGGER post_paste_forum_user AFTER INSERT ON posts FOR EACH ROW EXECUTE PROCEDURE post_paste_forum_user();
+
+
+-- создание трэда -> вставка юзера в forum_users
+CREATE OR REPLACE FUNCTION thread_paste_forum_user() RETURNS TRIGGER AS $thread_paste_forum_user$
+BEGIN
+    INSERT INTO forum_users
+    SELECT nickname, fullname, email, about, NEW.forum as forum 
+    FROM users
+    WHERE nickname = NEW.author
+	ON CONFLICT DO NOTHING;
+    
+    RETURN NULL;
+END;
+$thread_paste_forum_user$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS thread_paste_forum_user ON threads;
+CREATE TRIGGER thread_paste_forum_user AFTER INSERT ON threads FOR EACH ROW EXECUTE PROCEDURE thread_paste_forum_user();

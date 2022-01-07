@@ -26,7 +26,6 @@ func NewForumDelivery(threadUsecase threads.ThreadUsecase) *ThreadDelivery {
 func (td *ThreadDelivery) Routing(r *mux.Router) {
 	r.HandleFunc("/forum/{slug}/create", td.CreateThreadHandler).Methods(http.MethodPost, http.MethodOptions)
 	r.HandleFunc("/forum/{slug}/threads", td.GetThreadsHandler).Methods(http.MethodGet, http.MethodOptions)
-	r.HandleFunc("/forum/{slug}/users", td.GetUsersHandler).Methods(http.MethodGet, http.MethodOptions)
 	r.HandleFunc("/thread/{slug_or_id}/details", td.GetThreadHandler).Methods(http.MethodGet, http.MethodOptions)
 	r.HandleFunc("/thread/{slug_or_id}/details", td.UpdateThreadHandler).Methods(http.MethodPost, http.MethodOptions)
 }

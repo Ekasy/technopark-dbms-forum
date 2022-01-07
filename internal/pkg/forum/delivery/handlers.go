@@ -26,6 +26,7 @@ func NewForumDelivery(forumUsecase forum.ForumUsecase) *ForumDelivery {
 func (fd *ForumDelivery) Routing(r *mux.Router) {
 	r.HandleFunc("/forum/create", fd.CreateForumHandler).Methods(http.MethodPost, http.MethodOptions)
 	r.HandleFunc("/forum/{slug}/details", fd.GetForumHandler).Methods(http.MethodGet, http.MethodOptions)
+	r.HandleFunc("/forum/{slug}/users", fd.GetUsersHandler).Methods(http.MethodGet, http.MethodOptions)
 }
 
 func (fd *ForumDelivery) CreateForumHandler(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +81,22 @@ func (fd *ForumDelivery) GetForumHandler(w http.ResponseWriter, r *http.Request)
 	case myerr.NoRows:
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("forum %s not found", slug)}))
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(models.ToBytes(models.Error{Message: err.Error()}))
+	}
+}
+
+func (fd *ForumDelivery) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
+	fv := models.NewForumUsersQuery(mux.Vars(r), r.URL.Query())
+	users, err := fd.forumUsecase.GetUsersByForum(fv)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+		w.Write(models.ToBytes(users))
+	case myerr.ForumNotExist:
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(models.ToBytes(models.Error{Message: fmt.Sprintf("forum %s not found", fv.ForumSlug)}))
 	default:
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(models.ToBytes(models.Error{Message: err.Error()}))

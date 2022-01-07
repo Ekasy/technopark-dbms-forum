@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	myerr "forum/internal/error"
 	"forum/internal/models"
 	"forum/internal/pkg/forum"
@@ -83,4 +84,41 @@ func (fr *ForumRepository) SelectForum(slug string) (*models.Forum, error) {
 	}
 
 	return forum, nil
+}
+
+func (fr *ForumRepository) SelectUsers(fv *models.ForumUsersQuery) ([]*models.User, error) {
+	queryStr := `
+					SELECT nickname, fullname, about, email
+					FROM forum_users
+					WHERE forum LIKE $1 %s
+					ORDER BY nickname %s
+					LIMIT $2;
+				`
+	var rows *sql.Rows
+	var err error
+	if fv.Since != "" {
+		queryStr = fmt.Sprintf(queryStr, fmt.Sprintf(`AND nickname %s $3`, fv.Sign), fv.Sorting)
+		rows, err = fr.db.Query(queryStr, fv.ForumSlug, fv.Limit, fv.Since)
+	} else {
+		queryStr = fmt.Sprintf(queryStr, "", fv.Sorting)
+		rows, err = fr.db.Query(queryStr, fv.ForumSlug, fv.Limit)
+	}
+	if err != nil {
+		fr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	users := make([]*models.User, 0)
+	for rows.Next() {
+		user := &models.User{}
+		err = rows.Scan(&user.Nickname, &user.Fullname, &user.About, &user.Email)
+		if err != nil {
+			fr.logger.Println(err.Error())
+			return nil, myerr.InternalDbError
+		}
+
+		users = append(users, user)
+	}
+
+	return users, nil
 }

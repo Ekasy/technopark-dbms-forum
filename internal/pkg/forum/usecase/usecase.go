@@ -31,3 +31,17 @@ func (fu *ForumUsecase) GetForum(slug string) (*models.Forum, error) {
 	forum, err := fu.repo.SelectForum(slug)
 	return forum, err
 }
+
+func (fu *ForumUsecase) GetUsersByForum(fv *models.ForumUsersQuery) ([]*models.User, error) {
+	_, err := fu.repo.SelectForum(fv.ForumSlug)
+	switch err {
+	case nil:
+	case myerr.NoRows:
+		return nil, myerr.ForumNotExist
+	default:
+		return nil, err
+	}
+
+	users, err := fu.repo.SelectUsers(fv)
+	return users, err
+}
