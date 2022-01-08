@@ -53,7 +53,7 @@ func (tr *ThreadRepository) InsertThread(thread *models.Thread) error {
 			return myerr.ThreadAlreadyExist
 		}
 
-		res, _ = regexp.Match(".*pindex_threads_slug.*", []byte(err.Error()))
+		res, _ = regexp.Match(".*index_threads_slug.*", []byte(err.Error()))
 		if res {
 			return myerr.ThreadAlreadyExist
 		}

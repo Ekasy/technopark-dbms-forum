@@ -1,4 +1,10 @@
--- clear tables
+CREATE EXTENSION IF NOT EXISTS citext;
+
+
+-----------------------
+----- БЛОК ТАБЛИЦ -----
+-----------------------
+-- очистка таблиц
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS forum CASCADE;
 DROP TABLE IF EXISTS threads CASCADE;
@@ -6,15 +12,8 @@ DROP TABLE IF EXISTS posts CASCADE;
 DROP TABLE IF EXISTS votes CASCADE;
 DROP TABLE IF EXISTS forum_users CASCADE;
 
--- install module with case-insensitive string
-CREATE EXTENSION IF NOT EXISTS citext;
 
-
------------------------
------ БЛОК ТАБЛИЦ -----
------------------------
 CREATE TABLE IF NOT EXISTS users (
-    id          SERIAL              UNIQUE,
     nickname    CITEXT COLLATE "C"  NOT NULL PRIMARY KEY,
     fullname    TEXT                NOT NULL,
     email       CITEXT              NOT NULL UNIQUE,
@@ -22,7 +21,6 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS forum (
-    id          SERIAL       UNIQUE,
     slug        CITEXT       NOT NULL PRIMARY KEY,
     title       TEXT         NOT NULL,
     author      CITEXT       NOT NULL,
@@ -83,8 +81,49 @@ CREATE TABLE IF NOT EXISTS forum_users (
 -------------------------
 ----- БЛОК ИНДЕКСОВ -----
 -------------------------
-CREATE UNIQUE INDEX IF NOT EXISTS pindex_threads_slug ON threads(slug) WHERE TRIM(slug) <> '';
+-- очистка индексов
+DROP INDEX IF EXISTS index_users_nickname;
+DROP INDEX IF EXISTS index_users_email;
+DROP INDEX IF EXISTS index_forum_slug;
+DROP INDEX IF EXISTS index_threads_id;
+DROP INDEX IF EXISTS index_threads_slug;
+DROP INDEX IF EXISTS composite_index_threads_id_slug;
+DROP INDEX IF EXISTS composite_index_threads_forum_created;
+DROP INDEX IF EXISTS composite_index_threads_created;
+DROP INDEX IF EXISTS index_posts_id;
+DROP INDEX IF EXISTS index_posts_thread_parent;
+DROP INDEX IF EXISTS index_posts_thread_id;
+DROP INDEX IF EXISTS index_posts_thread_path;
+DROP INDEX IF EXISTS index_posts_path_parent;
+DROP INDEX IF EXISTS index_posts_path_1_path;
+DROP INDEX IF EXISTS index_forum_users_nickname;
+DROP INDEX IF EXISTS index_forum_users_forum;
 
+-- индексы для users
+CREATE UNIQUE INDEX IF NOT EXISTS index_users_nickname  ON users(nickname);
+CREATE UNIQUE INDEX IF NOT EXISTS index_users_email     ON users(email);
+
+-- индексы для forum
+CREATE UNIQUE INDEX IF NOT EXISTS index_forum_slug ON forum(slug);
+
+-- индексы для threads
+CREATE UNIQUE INDEX IF NOT EXISTS   index_threads_id                      ON threads(id);
+CREATE UNIQUE INDEX IF NOT EXISTS   index_threads_slug                    ON threads(slug) WHERE TRIM(slug) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS   composite_index_threads_id_slug       ON threads(id, slug);
+CREATE        INDEX IF NOT EXISTS   composite_index_threads_forum_created ON threads(forum, created);
+CREATE        INDEX IF NOT EXISTS   composite_index_threads_created       ON threads(created);
+
+-- индексы для posts
+CREATE UNIQUE INDEX IF NOT EXISTS   index_posts_id            ON posts(id);
+CREATE        INDEX IF NOT EXISTS   index_posts_thread_parent ON posts(thread, parent);
+CREATE        INDEX IF NOT EXISTS   index_posts_thread_id     ON posts(thread, id);
+CREATE        INDEX IF NOT EXISTS   index_posts_thread_path   ON posts(thread, path);
+CREATE        INDEX IF NOT EXISTS   index_posts_path_parent   ON posts(path, parent);
+CREATE        INDEX IF NOT EXISTS   index_posts_path_1_path   ON posts((path[1]), path);
+
+-- индексы для forum_users
+CREATE INDEX IF NOT EXISTS index_forum_users_nickname ON forum_users(nickname);
+CREATE INDEX IF NOT EXISTS index_forum_users_forum    ON forum_users(forum);
 
 
 --------------------------
