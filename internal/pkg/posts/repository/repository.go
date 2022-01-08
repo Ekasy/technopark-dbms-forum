@@ -40,10 +40,71 @@ func (pr *PostRepository) SelectFormSlugByThread(slug string, id int64) (string,
 	return forumSlug, threadId, nil
 }
 
+func (pr *PostRepository) CreatePosts(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
+	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
+	if err != nil {
+		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	var row *sql.Row
+	queryStr := `
+		INSERT INTO posts (message, forum, thread, created, author, parent) 
+		VALUES ($1, $2, $3, $4,
+			COALESCE((SELECT nickname FROM users WHERE nickname = $5), $5)
+			%s
+		)
+		RETURNING id, message, forum, thread, created, author, parent, isEdited;`
+	posts := make([]*models.Post, 0)
+	for _, ip := range inputPost {
+		subqueryStr := ""
+		if ip.Parent == 0 {
+			subqueryStr = fmt.Sprintf(queryStr, ", 0")
+			row = tx.QueryRow(subqueryStr, ip.Message, forumSlug, threadId, dt, ip.Author)
+		} else {
+			subqueryStr = fmt.Sprintf(
+				queryStr,
+				", (SELECT (CASE WHEN EXISTS (SELECT id FROM posts WHERE id = $6 AND thread = $3) THEN $6 ELSE NULL END))")
+			row = tx.QueryRow(subqueryStr, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent)
+		}
+
+		post := &models.Post{}
+		err = row.Scan(&post.Id, &post.Message, &post.Forum, &post.Thread, &post.Created, &post.Author, &post.Parent, &post.IsEdited)
+		if err != nil {
+			rollbackError := tx.Rollback()
+			if rollbackError != nil {
+				return nil, myerr.RollbackError
+			}
+
+			res, _ := regexp.Match(".*\"parent\" violates.*", []byte(err.Error()))
+			if res {
+				return nil, myerr.ParentNotExist
+			}
+
+			res, _ = regexp.Match(".*posts_author_fkey.*", []byte(err.Error()))
+			if res {
+				return nil, myerr.UserNotExist
+			}
+
+			pr.logger.Println(err.Error())
+			return nil, myerr.InternalDbError
+		}
+
+		posts = append(posts, post)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, myerr.CommitError
+	}
+	return posts, nil
+}
+
 func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, forumSlug string, threadId int64) (*models.Post, error) {
 	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
 	if err != nil {
 		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
 	}
 
 	var row *sql.Row
@@ -61,7 +122,7 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 		queryStr = fmt.Sprintf(
 			queryStr,
 			", parent",
-			", (SELECT (CASE WHEN EXISTS (SELECT id FROM posts WHERE id = $6 AND thread = $3) THEN $6 ELSE NULL END))")
+			", (SELECT (CASE WHEN EXISTS (SELECT id FROM posts WHERE id = $6 AND thread = $3) THEN $6 ELSE 0 END))")
 		row = tx.QueryRow(queryStr, inputPost.Message, forumSlug, threadId, dt, inputPost.Author, inputPost.Parent)
 	}
 
@@ -73,12 +134,12 @@ func (pr *PostRepository) CreatePost(inputPost *models.PostInput, dt string, for
 			return nil, myerr.RollbackError
 		}
 
-		res, _ := regexp.Match(".*null value in column \"parent\" violates not-null constraint.*", []byte(err.Error()))
+		res, _ := regexp.Match(".*\"parent\" violates.*", []byte(err.Error()))
 		if res {
 			return nil, myerr.ParentNotExist
 		}
 
-		res, _ = regexp.Match(".*foreign key constraint \"posts_author_fkey\".*", []byte(err.Error()))
+		res, _ = regexp.Match(".*posts_author_fkey.*", []byte(err.Error()))
 		if res {
 			return nil, myerr.UserNotExist
 		}

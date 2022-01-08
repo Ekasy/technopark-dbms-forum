@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS threads (
 
 CREATE TABLE IF NOT EXISTS posts (
     id          BIGSERIAL                   NOT NULL PRIMARY KEY,
-    parent      BIGINT                      NOT NULL DEFAULT 0,
+    parent      BIGINT                      NOT NULL,
     author      CITEXT                      NOT NULL,
     message     TEXT                        NOT NULL,
     isEdited    BOOLEAN                     NOT NULL DEFAULT FALSE,
@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS votes (
   	thread 		INT		NOT NULL,
   	voice     	INT		NOT NULL,
 	FOREIGN KEY (nickname) REFERENCES users(nickname),
-	FOREIGN KEY (thread) REFERENCES threads(id)
+	FOREIGN KEY (thread) REFERENCES threads(id),
+    PRIMARY KEY (nickname, thread)
 );
 
 CREATE TABLE IF NOT EXISTS forum_users (
@@ -94,36 +95,26 @@ DROP INDEX IF EXISTS index_posts_id;
 DROP INDEX IF EXISTS index_posts_thread_parent;
 DROP INDEX IF EXISTS index_posts_thread_id;
 DROP INDEX IF EXISTS index_posts_thread_path;
-DROP INDEX IF EXISTS index_posts_path_parent;
+DROP INDEX IF EXISTS index_posts_thread_created_id;
 DROP INDEX IF EXISTS index_posts_path_1_path;
 DROP INDEX IF EXISTS index_forum_users_nickname;
 DROP INDEX IF EXISTS index_forum_users_forum;
 
 -- индексы для users
-CREATE UNIQUE INDEX IF NOT EXISTS index_users_nickname  ON users(nickname);
-CREATE UNIQUE INDEX IF NOT EXISTS index_users_email     ON users(email);
 
 -- индексы для forum
-CREATE UNIQUE INDEX IF NOT EXISTS index_forum_slug ON forum(slug);
 
 -- индексы для threads
-CREATE UNIQUE INDEX IF NOT EXISTS   index_threads_id                      ON threads(id);
-CREATE UNIQUE INDEX IF NOT EXISTS   index_threads_slug                    ON threads(slug) WHERE TRIM(slug) <> '';
-CREATE UNIQUE INDEX IF NOT EXISTS   composite_index_threads_id_slug       ON threads(id, slug);
-CREATE        INDEX IF NOT EXISTS   composite_index_threads_forum_created ON threads(forum, created);
-CREATE        INDEX IF NOT EXISTS   composite_index_threads_created       ON threads(created);
+CREATE UNIQUE INDEX IF NOT EXISTS index_threads_slug                    ON threads(slug) WHERE TRIM(slug) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS composite_index_threads_id_slug       ON threads(id, slug);
+CREATE        INDEX IF NOT EXISTS composite_index_threads_forum_created ON threads(forum, created);
+CLUSTER threads USING composite_index_threads_forum_created;
 
 -- индексы для posts
-CREATE UNIQUE INDEX IF NOT EXISTS   index_posts_id            ON posts(id);
-CREATE        INDEX IF NOT EXISTS   index_posts_thread_parent ON posts(thread, parent);
-CREATE        INDEX IF NOT EXISTS   index_posts_thread_id     ON posts(thread, id);
-CREATE        INDEX IF NOT EXISTS   index_posts_thread_path   ON posts(thread, path);
-CREATE        INDEX IF NOT EXISTS   index_posts_path_parent   ON posts(path, parent);
-CREATE        INDEX IF NOT EXISTS   index_posts_path_1_path   ON posts((path[1]), path);
+CREATE UNIQUE INDEX IF NOT EXISTS index_posts_id_parent			ON posts(thread, id) WHERE parent != 0;
 
 -- индексы для forum_users
-CREATE INDEX IF NOT EXISTS index_forum_users_nickname ON forum_users(nickname);
-CREATE INDEX IF NOT EXISTS index_forum_users_forum    ON forum_users(forum);
+CREATE INDEX IF NOT EXISTS index_forum_users_nickname ON forum_users(nickname, forum);
 
 
 --------------------------

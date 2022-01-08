@@ -21,8 +21,8 @@ func NewDatabase(connString string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
+	db.SetMaxOpenConns(100)
+	db.SetMaxIdleConns(100)
 	db.SetConnMaxLifetime(time.Minute * 3)
 
 	return db, nil

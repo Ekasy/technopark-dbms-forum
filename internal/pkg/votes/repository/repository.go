@@ -37,75 +37,82 @@ func (vr *VoteRepository) SelectThread(vote *models.Vote) (int64, error) {
 	return vote.ThreadId, nil
 }
 
-func (vr *VoteRepository) UpdateVote(vote *models.Vote) (*models.Thread, error) {
+func (vr *VoteRepository) InsertVote(vote *models.Vote) error {
 	tx, err := vr.db.BeginTx(context.Background(), &sql.TxOptions{})
 	if err != nil {
-		return nil, myerr.InternalDbError
+		return myerr.InternalDbError
 	}
 
-	thread := &models.Thread{}
-	// need to detect not existing thread
-	res, err := vr.db.Exec(
+	_, err = tx.Exec("INSERT INTO votes(voice, nickname, thread) VALUES ($2, $3, $1);", vote.ThreadId, vote.Voice, vote.Nickname)
+	if err != nil {
+		rollbackError := tx.Rollback()
+		if rollbackError != nil {
+			return myerr.RollbackError
+		}
+
+		res, _ := regexp.Match(".*votes_pkey.*", []byte(err.Error()))
+		if res {
+			return myerr.ThreadAlreadyExist
+		}
+
+		res, _ = regexp.Match(".*votes_nickname_fkey.*", []byte(err.Error()))
+		if res {
+			return myerr.UserNotExist
+		}
+
+		vr.logger.Println(err.Error())
+		return myerr.InternalDbError
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return myerr.CommitError
+	}
+
+	return nil
+}
+
+func (vr *VoteRepository) UpdateVote(vote *models.Vote) error {
+	tx, err := vr.db.BeginTx(context.Background(), &sql.TxOptions{})
+	if err != nil {
+		return myerr.InternalDbError
+	}
+
+	_, err = tx.Exec(
 		"UPDATE votes SET voice = $1 WHERE nickname = $2 AND thread = $3;",
 		vote.Voice, vote.Nickname, vote.ThreadId)
 	if err != nil {
 		rollbackError := tx.Rollback()
 		if rollbackError != nil {
-			return nil, myerr.RollbackError
+			return myerr.RollbackError
 		}
 
-		res, _ := regexp.Match(".*foreign key constraint \"votes_nickname_fkey\".*", []byte(err.Error()))
+		res, _ := regexp.Match(".*votes_nickname_fkey.*", []byte(err.Error()))
 		if res {
-			return nil, myerr.UserNotExist
+			return myerr.UserNotExist
 		}
 
 		vr.logger.Println(err.Error())
-		return nil, myerr.InternalDbError
-	}
-
-	ra, err := res.RowsAffected()
-	if err != nil {
-		rollbackError := tx.Rollback()
-		if rollbackError != nil {
-			return nil, myerr.RollbackError
-		}
-		vr.logger.Println(err.Error())
-		return nil, myerr.InternalDbError
-	}
-
-	var row *sql.Row
-	if ra == 0 {
-		_, err = tx.Exec("INSERT INTO votes(voice, nickname, thread) VALUES ($2, $3, $1);", vote.ThreadId, vote.Voice, vote.Nickname)
-		if err != nil {
-			rollbackError := tx.Rollback()
-			if rollbackError != nil {
-				return nil, myerr.RollbackError
-			}
-
-			res, _ := regexp.Match(".*foreign key constraint \"votes_nickname_fkey\".*", []byte(err.Error()))
-			if res {
-				return nil, myerr.UserNotExist
-			}
-
-			vr.logger.Println(err.Error())
-			return nil, myerr.InternalDbError
-		}
-	}
-
-	row = tx.QueryRow("SELECT id, title, author, forum, message, votes, slug, created FROM threads WHERE id = $1", vote.ThreadId)
-	err = row.Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Forum, &thread.Message, &thread.Votes, &thread.Slug, &thread.Created)
-	if err != nil {
-		rollbackError := tx.Rollback()
-		if rollbackError != nil {
-			return nil, myerr.RollbackError
-		}
-		vr.logger.Println(err.Error())
-		return nil, myerr.InternalDbError
+		return myerr.InternalDbError
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, myerr.CommitError
+		return myerr.CommitError
 	}
+
+	return nil
+}
+
+func (vr *VoteRepository) SelectThreadById(threadId int64) (*models.Thread, error) {
+	thread := &models.Thread{}
+
+	row := vr.db.QueryRow("SELECT id, title, author, forum, message, votes, slug, created FROM threads WHERE id = $1", threadId)
+	err := row.Scan(&thread.Id, &thread.Title, &thread.Author, &thread.Forum, &thread.Message, &thread.Votes, &thread.Slug, &thread.Created)
+	if err != nil {
+		vr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
 	return thread, nil
 }
