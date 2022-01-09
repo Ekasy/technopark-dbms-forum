@@ -36,7 +36,8 @@ import (
 )
 
 func main() {
-	db, err := db.NewDatabase(fmt.Sprintf("postgres://%s:%s@%s:%s/%s", "postgres", "password", "127.0.0.1", "5432", "forum"))
+	dbConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", "ekasy", "ekasy", "127.0.0.1", "5432", "forum")
+	db, err := db.NewDatabase(dbConnStr)
 	if err != nil {
 		return
 	}
