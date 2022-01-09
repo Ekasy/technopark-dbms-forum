@@ -4,7 +4,10 @@ ADD . /app
 WORKDIR /app
 RUN go build ./cmd/main/main.go
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
+
+RUN apt-get -y update &&\
+    apt-get install -y tzdata
 
 ENV POSTGRES_VERSION 12
 
@@ -16,7 +19,7 @@ USER postgres
 RUN /etc/init.d/postgresql start &&\
     psql --command "CREATE USER ekasy WITH SUPERUSER PASSWORD 'ekasy';" &&\
     createdb -O postgres forum &&\
-    /etc/init.db/postgresql stop
+    /etc/init.d/postgresql stop
 
 RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/${POSTGRES_VERSION}/main/pg_hba.conf
 RUN echo "listen_addresses='*'" >> /etc/postgresql/${POSTGRES_VERSION}/main/postgresql.conf

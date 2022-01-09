@@ -82,24 +82,6 @@ CREATE TABLE IF NOT EXISTS forum_users (
 -------------------------
 ----- БЛОК ИНДЕКСОВ -----
 -------------------------
--- очистка индексов
-DROP INDEX IF EXISTS index_users_nickname;
-DROP INDEX IF EXISTS index_users_email;
-DROP INDEX IF EXISTS index_forum_slug;
-DROP INDEX IF EXISTS index_threads_id;
-DROP INDEX IF EXISTS index_threads_slug;
-DROP INDEX IF EXISTS composite_index_threads_id_slug;
-DROP INDEX IF EXISTS composite_index_threads_forum_created;
-DROP INDEX IF EXISTS composite_index_threads_created;
-DROP INDEX IF EXISTS index_posts_id;
-DROP INDEX IF EXISTS index_posts_thread_parent;
-DROP INDEX IF EXISTS index_posts_thread_id;
-DROP INDEX IF EXISTS index_posts_thread_path;
-DROP INDEX IF EXISTS index_posts_thread_created_id;
-DROP INDEX IF EXISTS index_posts_path_1_path;
-DROP INDEX IF EXISTS index_forum_users_nickname;
-DROP INDEX IF EXISTS index_forum_users_forum;
-
 -- индексы для users
 
 -- индексы для forum
@@ -107,12 +89,6 @@ DROP INDEX IF EXISTS index_forum_users_forum;
 -- индексы для threads
 DROP INDEX IF EXISTS index_threads_slug;
 CREATE UNIQUE INDEX IF NOT EXISTS index_threads_slug ON threads(slug) WHERE TRIM(slug) <> '';
-
-DROP INDEX IF EXISTS index_threads_forum;
--- CREATE INDEX IF NOT EXISTS index_threads_forum ON threads(forum);
-
-DROP INDEX IF EXISTS index_thread__id_forum;
--- CREATE INDEX  IF NOT EXISTS index_thread__id_forum ON threads(id, forum);
 
 DROP INDEX IF EXISTS index_thread__forum_created_at;
 CREATE INDEX IF NOT EXISTS index_thread__forum_created ON threads(forum, created); -- для сортировки
@@ -130,10 +106,7 @@ CREATE INDEX IF NOT EXISTS index_posts__parent_thread ON posts(parent, thread); 
 DROP INDEX IF EXISTS index_posts__path1_path_id;
 CREATE INDEX IF NOT EXISTS index_posts__path1_path_id ON posts ((path[1]), path, id) WHERE path IS NOT NULL; -- для related
 
-
 -- индексы для forum_users
-DROP INDEX IF EXISTS index_forum_users__forum;
-CREATE INDEX IF NOT EXISTS index_forum_users__forum ON forum_users(forum);
 
 
 
