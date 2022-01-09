@@ -121,7 +121,7 @@ func (tr *ThreadRepository) SelectThreadsByForum(tv *models.ThreadsVars) ([]*mod
 				`
 	var rows *sql.Rows
 	if tv.Since != "" {
-		queryStr = fmt.Sprintf(queryStr, fmt.Sprintf(`AND created::timestamp %s $3::timestamp with time zone`, tv.Sign), tv.Sorting)
+		queryStr = fmt.Sprintf(queryStr, fmt.Sprintf(`AND created %s $3::timestamp with time zone`, tv.Sign), tv.Sorting)
 		rows, err = tr.db.Query(queryStr, tv.ForumSlug, tv.Limit, tv.Since)
 	} else {
 		queryStr = fmt.Sprintf(queryStr, "", tv.Sorting)

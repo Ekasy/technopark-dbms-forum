@@ -105,16 +105,36 @@ DROP INDEX IF EXISTS index_forum_users_forum;
 -- индексы для forum
 
 -- индексы для threads
-CREATE UNIQUE INDEX IF NOT EXISTS index_threads_slug                    ON threads(slug) WHERE TRIM(slug) <> '';
-CREATE UNIQUE INDEX IF NOT EXISTS composite_index_threads_id_slug       ON threads(id, slug);
-CREATE        INDEX IF NOT EXISTS composite_index_threads_forum_created ON threads(forum, created);
-CLUSTER threads USING composite_index_threads_forum_created;
+DROP INDEX IF EXISTS index_threads_slug;
+CREATE UNIQUE INDEX IF NOT EXISTS index_threads_slug ON threads(slug) WHERE TRIM(slug) <> '';
+
+DROP INDEX IF EXISTS index_threads_forum;
+-- CREATE INDEX IF NOT EXISTS index_threads_forum ON threads(forum);
+
+DROP INDEX IF EXISTS index_thread__id_forum;
+-- CREATE INDEX  IF NOT EXISTS index_thread__id_forum ON threads(id, forum);
+
+DROP INDEX IF EXISTS index_thread__forum_created_at;
+CREATE INDEX IF NOT EXISTS index_thread__forum_created ON threads(forum, created); -- для сортировки
+
+DROP INDEX IF EXISTS index_thread__slug_id_forum;
+CREATE INDEX IF NOT EXISTS index_thread__slug_id_forum ON threads(slug, id, forum); -- + ~400rps
 
 -- индексы для posts
-CREATE UNIQUE INDEX IF NOT EXISTS index_posts_id_parent			ON posts(thread, id) WHERE parent != 0;
+DROP INDEX IF EXISTS index_posts__thread;
+CREATE INDEX IF NOT EXISTS index_posts__thread ON posts(thread);
+
+DROP INDEX IF EXISTS index_posts__parent_thread;
+CREATE INDEX IF NOT EXISTS index_posts__parent_thread ON posts(parent, thread); -- для related
+
+DROP INDEX IF EXISTS index_posts__path1_path_id;
+CREATE INDEX IF NOT EXISTS index_posts__path1_path_id ON posts ((path[1]), path, id) WHERE path IS NOT NULL; -- для related
+
 
 -- индексы для forum_users
-CREATE INDEX IF NOT EXISTS index_forum_users_nickname ON forum_users(nickname, forum);
+DROP INDEX IF EXISTS index_forum_users__forum;
+CREATE INDEX IF NOT EXISTS index_forum_users__forum ON forum_users(forum);
+
 
 
 --------------------------
