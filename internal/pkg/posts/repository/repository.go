@@ -9,6 +9,7 @@ import (
 	"forum/internal/pkg/posts"
 	"log"
 	"regexp"
+	"strings"
 )
 
 type PostRepository struct {
@@ -38,6 +39,114 @@ func (pr *PostRepository) SelectFormSlugByThread(slug string, id int64) (string,
 		return "", 0, myerr.InternalDbError
 	}
 	return forumSlug, threadId, nil
+}
+
+func (pr *PostRepository) CheckNickname(nickname string) error {
+	row := pr.db.QueryRow("SELECT nickname FROM users WHERE nickname = $1;", nickname)
+	err := row.Scan(&nickname)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return myerr.NoRows
+		}
+		return myerr.InternalDbError
+	}
+	return nil
+}
+
+func (pr *PostRepository) CheckParent(threadId int64, parent int64) error {
+	row := pr.db.QueryRow("SELECT parent FROM posts WHERE id = $1 AND thread = $2;", parent, threadId)
+	err := row.Scan(&parent)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			return myerr.NoRows
+		}
+		return myerr.InternalDbError
+	}
+	return nil
+}
+
+func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
+	queryStr := "INSERT INTO posts (message, forum, thread, created, author, parent) VALUES"
+	args := make([]interface{}, 0)
+	var err1, err2 error = nil, nil
+	for ind, ip := range inputPost {
+		err1 = pr.CheckNickname(ip.Author)
+		if ip.Parent != 0 {
+			err2 = pr.CheckParent(threadId, ip.Parent)
+		} else {
+			err2 = nil
+		}
+
+		switch true {
+		case err1 == myerr.InternalDbError || err2 == myerr.InternalDbError:
+			return nil, myerr.InternalDbError
+		case err1 == myerr.NoRows:
+			return nil, myerr.UserNotExist
+		case err2 == myerr.NoRows:
+			return nil, myerr.ParentNotExist
+		}
+
+		queryStr += fmt.Sprintf(
+			" ($%d, $%d, $%d, $%d, $%d, $%d),",
+			ind*6+1, ind*6+2, ind*6+3, ind*6+4, ind*6+5, ind*6+6)
+		args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent)
+	}
+
+	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
+	if err != nil {
+		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
+	}
+
+	queryStr = strings.TrimSuffix(queryStr, ",")
+	queryStr += " RETURNING id, message, forum, thread, created, author, parent, isEdited;"
+	rows, err := tx.Query(queryStr, args...)
+	if err != nil {
+		pr.logger.Println("before scan:", err.Error())
+		return nil, myerr.InternalDbError
+	}
+	defer rows.Close()
+
+	posts := make([]*models.Post, 0)
+	for rows.Next() {
+		post := &models.Post{}
+		err = rows.Scan(&post.Id, &post.Message, &post.Forum, &post.Thread, &post.Created, &post.Author, &post.Parent, &post.IsEdited)
+		if err != nil {
+			rollbackError := tx.Rollback()
+			if rollbackError != nil {
+				return nil, myerr.RollbackError
+			}
+
+			res, _ := regexp.Match(".*parent in another thread.*", []byte(err.Error()))
+			if res {
+				return nil, myerr.ParentNotExist
+			}
+
+			res, _ = regexp.Match(".*\"parent\" violates.*", []byte(err.Error()))
+			if res {
+				return nil, myerr.ParentNotExist
+			}
+
+			res, _ = regexp.Match(".*posts_author_fkey.*", []byte(err.Error()))
+			if res {
+				return nil, myerr.UserNotExist
+			}
+
+			pr.logger.Println(err.Error())
+			return nil, myerr.InternalDbError
+		}
+
+		posts = append(posts, post)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, myerr.CommitError
+	}
+
+	return posts, nil
 }
 
 func (pr *PostRepository) CreatePosts(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {

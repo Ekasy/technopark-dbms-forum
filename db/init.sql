@@ -83,8 +83,6 @@ CREATE TABLE IF NOT EXISTS forum_users (
 ----- БЛОК ИНДЕКСОВ -----
 -------------------------
 -- индексы для users
-CLUSTER users using users_pkey;
-
 
 -- индексы для forum
 
@@ -102,8 +100,8 @@ CREATE INDEX IF NOT EXISTS index_thread__slug_id_forum ON threads(slug, id, foru
 DROP INDEX IF EXISTS index_posts__thread;
 CREATE INDEX IF NOT EXISTS index_posts__thread ON posts(thread);
 
-DROP INDEX IF EXISTS index_posts__parent;
-CREATE INDEX IF NOT EXISTS index_posts__parent ON posts(parent);
+DROP INDEX IF EXISTS index_posts__id_thread;
+CREATE INDEX IF NOT EXISTS index_posts__id_thread ON posts(id, thread);
 
 DROP INDEX IF EXISTS index_posts__parent_thread;
 CREATE INDEX IF NOT EXISTS index_posts__parent_thread ON posts(parent, thread) WHERE parent != 0; -- для related
