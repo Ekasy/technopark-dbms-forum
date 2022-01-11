@@ -10,6 +10,8 @@ import (
 	"log"
 	"regexp"
 	"strings"
+
+	"github.com/lib/pq"
 )
 
 type PostRepository struct {
@@ -49,32 +51,50 @@ func (pr *PostRepository) CheckNickname(nickname string) error {
 		if res {
 			return myerr.NoRows
 		}
+		pr.logger.Println(err.Error())
 		return myerr.InternalDbError
 	}
 	return nil
 }
 
-func (pr *PostRepository) CheckParent(threadId int64, parent int64) error {
-	row := pr.db.QueryRow("SELECT parent FROM posts WHERE id = $1 AND thread = $2;", parent, threadId)
-	err := row.Scan(&parent)
+func (pr *PostRepository) CheckParent(threadId int64, parent int64) ([]int64, error) {
+	path := make([]int64, 0)
+	row := pr.db.QueryRow("SELECT id, path FROM posts WHERE id = $1 AND thread = $2;", parent, threadId)
+	err := row.Scan(&parent, pq.Array(&path))
 	if err != nil {
 		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
 		if res {
-			return myerr.NoRows
+			return nil, myerr.NoRows
 		}
-		return myerr.InternalDbError
+		pr.logger.Println(err.Error())
+		return nil, myerr.InternalDbError
 	}
-	return nil
+	return path, nil
 }
 
 func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
-	queryStr := "INSERT INTO posts (message, forum, thread, created, author, parent) VALUES"
+	// get max id
+	row := pr.db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM posts;")
+	var maxId int64
+	err := row.Scan(&maxId)
+	if err != nil {
+		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
+		if res {
+			maxId = 0
+		} else {
+			pr.logger.Println("aboba", err.Error())
+			return nil, myerr.InternalDbError
+		}
+	}
+
+	queryStr := "INSERT INTO posts (message, forum, thread, created, author, parent, path) VALUES"
 	args := make([]interface{}, 0)
 	var err1, err2 error = nil, nil
 	for ind, ip := range inputPost {
+		path := make([]int64, 0)
 		err1 = pr.CheckNickname(ip.Author)
 		if ip.Parent != 0 {
-			err2 = pr.CheckParent(threadId, ip.Parent)
+			path, err2 = pr.CheckParent(threadId, ip.Parent)
 		} else {
 			err2 = nil
 		}
@@ -89,9 +109,9 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 		}
 
 		queryStr += fmt.Sprintf(
-			" ($%d, $%d, $%d, $%d, $%d, $%d),",
-			ind*6+1, ind*6+2, ind*6+3, ind*6+4, ind*6+5, ind*6+6)
-		args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent)
+			" ($%d, $%d, $%d, $%d, $%d, $%d, CAST($%d AS BIGINT ARRAY) || CAST($%d AS BIGINT)),",
+			ind*8+1, ind*8+2, ind*8+3, ind*8+4, ind*8+5, ind*8+6, ind*8+7, ind*8+8)
+		args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent, pq.Array(path), maxId+int64(ind)+1)
 	}
 
 	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
@@ -103,6 +123,7 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 	queryStr = strings.TrimSuffix(queryStr, ",")
 	queryStr += " RETURNING id, message, forum, thread, created, author, parent, isEdited;"
 	rows, err := tx.Query(queryStr, args...)
+	// rows, err := pr.db.Query(queryStr, args...)
 	if err != nil {
 		pr.logger.Println("before scan:", err.Error())
 		return nil, myerr.InternalDbError
