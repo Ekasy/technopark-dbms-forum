@@ -73,20 +73,6 @@ func (pr *PostRepository) CheckParent(threadId int64, parent int64) ([]int64, er
 }
 
 func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
-	// get max id
-	row := pr.db.QueryRow("select nextval(pg_get_serial_sequence('posts', 'id')) as new_id;")
-	var maxId int64
-	err := row.Scan(&maxId)
-	if err != nil {
-		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
-		if res {
-			maxId = 0
-		} else {
-			pr.logger.Println("aboba", err.Error())
-			return nil, myerr.InternalDbError
-		}
-	}
-
 	queryStr := "INSERT INTO posts (message, forum, thread, created, author, parent, path) VALUES"
 	args := make([]interface{}, 0)
 	var err1, err2 error = nil, nil
