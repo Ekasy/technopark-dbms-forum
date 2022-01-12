@@ -72,7 +72,7 @@ func (pr *PostRepository) CheckParent(threadId int64, parent int64) ([]int64, er
 	return path, nil
 }
 
-func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
+func (pr *PostRepository) CreatePosts(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
 	queryStr := "INSERT INTO posts (message, forum, thread, created, author, parent, path) VALUES"
 	args := make([]interface{}, 0)
 	var err1, err2 error = nil, nil
@@ -97,11 +97,6 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 			" ($%d, $%d, $%d, $%d, $%d, $%d, CAST($%d AS BIGINT ARRAY)),",
 			ind*7+1, ind*7+2, ind*7+3, ind*7+4, ind*7+5, ind*7+6, ind*7+7)
 		args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent, pq.Array(path))
-
-		// queryStr += fmt.Sprintf(
-		// 	" ($%d, $%d, $%d, $%d, $%d, $%d, CAST($%d AS BIGINT ARRAY) || CAST((select nextval(pg_get_serial_sequence('posts', 'id'))) + $%d AS BIGINT)),",
-		// 	ind*8+1, ind*8+2, ind*8+3, ind*8+4, ind*8+5, ind*8+6, ind*8+7, ind*8+8)
-		// args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent, pq.Array(path), int64(ind)+1)
 	}
 
 	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
@@ -113,7 +108,6 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 	queryStr = strings.TrimSuffix(queryStr, ",")
 	queryStr += " RETURNING id, message, forum, thread, created, author, parent, isEdited;"
 	rows, err := tx.Query(queryStr, args...)
-	// rows, err := pr.db.Query(queryStr, args...)
 	if err != nil {
 		pr.logger.Println("before scan:", err.Error())
 		return nil, myerr.InternalDbError
@@ -142,66 +136,6 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 		return nil, myerr.CommitError
 	}
 
-	return posts, nil
-}
-
-func (pr *PostRepository) CreatePosts(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
-	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
-	if err != nil {
-		pr.logger.Println(err.Error())
-		return nil, myerr.InternalDbError
-	}
-
-	var row *sql.Row
-	queryStr := `
-		INSERT INTO posts (message, forum, thread, created, author, parent) 
-		VALUES ($1, $2, $3, $4,
-			COALESCE((SELECT nickname FROM users WHERE nickname = $5), $5)
-			%s
-		)
-		RETURNING id, message, forum, thread, created, author, parent, isEdited;`
-	posts := make([]*models.Post, 0)
-	for _, ip := range inputPost {
-		subqueryStr := ""
-		if ip.Parent == 0 {
-			subqueryStr = fmt.Sprintf(queryStr, ", 0")
-			row = tx.QueryRow(subqueryStr, ip.Message, forumSlug, threadId, dt, ip.Author)
-		} else {
-			subqueryStr = fmt.Sprintf(
-				queryStr,
-				", (SELECT (CASE WHEN EXISTS (SELECT id FROM posts WHERE id = $6 AND thread = $3) THEN $6 ELSE NULL END))")
-			row = tx.QueryRow(subqueryStr, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent)
-		}
-
-		post := &models.Post{}
-		err = row.Scan(&post.Id, &post.Message, &post.Forum, &post.Thread, &post.Created, &post.Author, &post.Parent, &post.IsEdited)
-		if err != nil {
-			rollbackError := tx.Rollback()
-			if rollbackError != nil {
-				return nil, myerr.RollbackError
-			}
-
-			res, _ := regexp.Match(".*\"parent\" violates.*", []byte(err.Error()))
-			if res {
-				return nil, myerr.ParentNotExist
-			}
-
-			res, _ = regexp.Match(".*posts_author_fkey.*", []byte(err.Error()))
-			if res {
-				return nil, myerr.UserNotExist
-			}
-
-			pr.logger.Println(err.Error())
-			return nil, myerr.InternalDbError
-		}
-
-		posts = append(posts, post)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return nil, myerr.CommitError
-	}
 	return posts, nil
 }
 

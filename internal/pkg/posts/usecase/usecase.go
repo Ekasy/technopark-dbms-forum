@@ -33,8 +33,7 @@ func (pu *PostUsecase) CreatePostsBySlugOrId(slug string, id int64, postsInput [
 	}
 
 	dt := time.Now().Format(models.Layout)
-	// posts, err := pu.repo.CreatePosts(postsInput, dt, forumSlug, threadId)
-	posts, err := pu.repo.CreatePostsAsync(postsInput, dt, forumSlug, threadId)
+	posts, err := pu.repo.CreatePosts(postsInput, dt, forumSlug, threadId)
 
 	return posts, err
 }

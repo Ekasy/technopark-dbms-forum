@@ -8,7 +8,6 @@ import (
 	"forum/internal/pkg/forum"
 	"io/ioutil"
 	"net/http"
-	"regexp"
 
 	"github.com/gorilla/mux"
 )
@@ -66,12 +65,6 @@ func (fd *ForumDelivery) CreateForumHandler(w http.ResponseWriter, r *http.Reque
 
 func (fd *ForumDelivery) GetForumHandler(w http.ResponseWriter, r *http.Request) {
 	slug := mux.Vars(r)["slug"]
-	res, _ := regexp.Match("[a-z0-9]+(?:-[a-z0-9]+)*", []byte(slug))
-	if !res {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(models.ToBytes(models.Error{Message: "invalid slug"}))
-		return
-	}
 
 	forum, err := fd.forumUsecase.GetForum(slug)
 	switch err {

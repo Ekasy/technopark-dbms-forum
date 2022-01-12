@@ -51,8 +51,7 @@ CREATE TABLE IF NOT EXISTS posts (
     forum       CITEXT                      NOT NULL,
     thread      INTEGER                     NOT NULL,
     created     TIMESTAMP WITH TIME ZONE    NOT NULL DEFAULT NOW(),
-    path        BIGINT ARRAY,
-    parentRoot  BIGINT,
+    path        BIGINT                      ARRAY,
     FOREIGN KEY (author) REFERENCES users (nickname),
     FOREIGN KEY (forum) REFERENCES forum (slug),
     FOREIGN KEY (thread) REFERENCES threads (id)
@@ -107,7 +106,7 @@ DROP INDEX IF EXISTS index_posts__parent_thread;
 CREATE INDEX IF NOT EXISTS index_posts__parent_thread ON posts(parent, thread) WHERE parent != 0; -- для related
 
 DROP INDEX IF EXISTS index_posts__path1_path_id;
-CREATE INDEX IF NOT EXISTS index_posts__path1_path_id ON posts ((path[1]), path, id) WHERE path IS NOT NULL; -- для related
+-- CREATE INDEX IF NOT EXISTS index_posts__path1_path_id ON posts ((path[1]), path, id) WHERE path IS NOT NULL; -- для related
 
 -- индексы для forum_users
 
@@ -147,35 +146,6 @@ $vote_update$ LANGUAGE  plpgsql;
 
 DROP TRIGGER IF EXISTS vote_update ON votes;
 CREATE TRIGGER vote_update AFTER UPDATE ON votes FOR EACH ROW EXECUTE PROCEDURE vote_update();
-
-
--- вставка поста -> обновление родительского поста ()
--- CREATE OR REPLACE FUNCTION update_path() RETURNS TRIGGER AS $update_path$
--- BEGIN
---     IF NEW.parent = 0
---     THEN
-    
---         UPDATE posts
---         SET path = ARRAY [NEW.id]
---         WHERE id = NEW.id;
-    
---     ELSE
-        
---         UPDATE posts SET
---             path = array_append(
---                 (SELECT path FROM posts WHERE id = NEW.parent), 
---                 NEW.id
---             )
---         WHERE id = NEW.id;
-
---     END IF;
-
---     RETURN NULL;
--- END;
--- $update_path$ LANGUAGE plpgsql;
-
--- DROP TRIGGER IF EXISTS update_path ON posts;
--- CREATE TRIGGER update_path AFTER INSERT ON posts FOR EACH ROW EXECUTE PROCEDURE update_path();
 
 
 -- создание поста -> инкремент числа постов в форуме
