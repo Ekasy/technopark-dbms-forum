@@ -43,28 +43,28 @@ func (pr *PostRepository) SelectFormSlugByThread(slug string, id int64) (string,
 	return forumSlug, threadId, nil
 }
 
-func (pr *PostRepository) CheckNickname(nickname string) error {
+func (pr *PostRepository) CheckNickname(nickname string) (string, error) {
 	row := pr.db.QueryRow("SELECT nickname FROM users WHERE nickname = $1;", nickname)
 	err := row.Scan(&nickname)
 	if err != nil {
 		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
 		if res {
-			return myerr.NoRows
+			return "", myerr.UserNotExist
 		}
 		pr.logger.Println(err.Error())
-		return myerr.InternalDbError
+		return "", myerr.InternalDbError
 	}
-	return nil
+	return nickname, nil
 }
 
 func (pr *PostRepository) CheckParent(threadId int64, parent int64) ([]int64, error) {
 	path := make([]int64, 0)
-	row := pr.db.QueryRow("SELECT id, path FROM posts WHERE id = $1 AND thread = $2;", parent, threadId)
-	err := row.Scan(&parent, pq.Array(&path))
+	row := pr.db.QueryRow("SELECT array_append(path, id) FROM posts WHERE id = $1 AND thread = $2;", parent, threadId)
+	err := row.Scan(pq.Array(&path))
 	if err != nil {
 		res, _ := regexp.Match(".*no rows in result set.*", []byte(err.Error()))
 		if res {
-			return nil, myerr.NoRows
+			return nil, myerr.ParentNotExist
 		}
 		pr.logger.Println(err.Error())
 		return nil, myerr.InternalDbError
@@ -74,7 +74,7 @@ func (pr *PostRepository) CheckParent(threadId int64, parent int64) ([]int64, er
 
 func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt string, forumSlug string, threadId int64) ([]*models.Post, error) {
 	// get max id
-	row := pr.db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM posts;")
+	row := pr.db.QueryRow("select nextval(pg_get_serial_sequence('posts', 'id')) as new_id;")
 	var maxId int64
 	err := row.Scan(&maxId)
 	if err != nil {
@@ -92,26 +92,30 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 	var err1, err2 error = nil, nil
 	for ind, ip := range inputPost {
 		path := make([]int64, 0)
-		err1 = pr.CheckNickname(ip.Author)
+		ip.Author, err1 = pr.CheckNickname(ip.Author)
 		if ip.Parent != 0 {
 			path, err2 = pr.CheckParent(threadId, ip.Parent)
 		} else {
 			err2 = nil
 		}
 
-		switch true {
-		case err1 == myerr.InternalDbError || err2 == myerr.InternalDbError:
-			return nil, myerr.InternalDbError
-		case err1 == myerr.NoRows:
-			return nil, myerr.UserNotExist
-		case err2 == myerr.NoRows:
-			return nil, myerr.ParentNotExist
+		if err1 != nil {
+			return nil, err1
+		}
+
+		if err2 != nil {
+			return nil, err2
 		}
 
 		queryStr += fmt.Sprintf(
-			" ($%d, $%d, $%d, $%d, $%d, $%d, CAST($%d AS BIGINT ARRAY) || CAST($%d AS BIGINT)),",
-			ind*8+1, ind*8+2, ind*8+3, ind*8+4, ind*8+5, ind*8+6, ind*8+7, ind*8+8)
-		args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent, pq.Array(path), maxId+int64(ind)+1)
+			" ($%d, $%d, $%d, $%d, $%d, $%d, CAST($%d AS BIGINT ARRAY)),",
+			ind*7+1, ind*7+2, ind*7+3, ind*7+4, ind*7+5, ind*7+6, ind*7+7)
+		args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent, pq.Array(path))
+
+		// queryStr += fmt.Sprintf(
+		// 	" ($%d, $%d, $%d, $%d, $%d, $%d, CAST($%d AS BIGINT ARRAY) || CAST((select nextval(pg_get_serial_sequence('posts', 'id'))) + $%d AS BIGINT)),",
+		// 	ind*8+1, ind*8+2, ind*8+3, ind*8+4, ind*8+5, ind*8+6, ind*8+7, ind*8+8)
+		// args = append(args, ip.Message, forumSlug, threadId, dt, ip.Author, ip.Parent, pq.Array(path), int64(ind)+1)
 	}
 
 	tx, err := pr.db.BeginTx(context.Background(), &sql.TxOptions{})
@@ -138,21 +142,6 @@ func (pr *PostRepository) CreatePostsAsync(inputPost []*models.PostInput, dt str
 			rollbackError := tx.Rollback()
 			if rollbackError != nil {
 				return nil, myerr.RollbackError
-			}
-
-			res, _ := regexp.Match(".*parent in another thread.*", []byte(err.Error()))
-			if res {
-				return nil, myerr.ParentNotExist
-			}
-
-			res, _ = regexp.Match(".*\"parent\" violates.*", []byte(err.Error()))
-			if res {
-				return nil, myerr.ParentNotExist
-			}
-
-			res, _ = regexp.Match(".*posts_author_fkey.*", []byte(err.Error()))
-			if res {
-				return nil, myerr.UserNotExist
 			}
 
 			pr.logger.Println(err.Error())
@@ -324,28 +313,29 @@ func (pr *PostRepository) SelectThreadsBySort(tq *models.ThreadsQuery) ([]*model
 					FROM posts WHERE thread = $1 `
 		args = append(args, tq.ThreadId)
 		if tq.Since != 0 {
-			queryStr = queryStr + "AND path %s (SELECT path FROM posts WHERE id = $%d) "
+			queryStr = queryStr + "AND array_append(path, id) %s (SELECT array_append(path, id) FROM posts WHERE id = $%d) "
 			nums = append(nums, tq.Sign, counter)
 			counter = counter + 1
 			args = append(args, tq.Since)
 		}
-		queryStr = queryStr + "ORDER BY path %s LIMIT $%d"
+		queryStr = queryStr + "ORDER BY array_append(path, id) %s LIMIT $%d"
 		nums = append(nums, tq.Sorting, counter)
 		args = append(args, tq.Limit)
 		queryStr = fmt.Sprintf(queryStr, nums...)
 	} else if tq.Sort == "parent_tree" {
-		queryStr = `SELECT id, message, forum, thread, created, author, parent, isEdited 
-					FROM posts WHERE path[1] IN (
+		queryStr = `SELECT t.id, t.message, t.forum, t.thread, t.created, t.author, t.parent, t.isEdited 
+					FROM (SELECT *, CASE WHEN cardinality(path) = 0 THEN id ELSE path[1] END as rooot FROM posts) as t
+					WHERE t.rooot IN (
 						SELECT id FROM posts
 						WHERE thread = $1 AND parent = 0 %s
 						ORDER BY id %s
 						LIMIT $%d
 					) AND thread = $1
-					ORDER BY path[1] %s, path`
+					ORDER BY t.rooot %s, array_append(path, id)`
 		args = append(args, tq.ThreadId)
 		s1 := ""
 		if tq.Since != 0 {
-			s1 = "AND id %s (SELECT path[1] FROM posts WHERE id = $%d)"
+			s1 = "AND id %s (SELECT CASE WHEN cardinality(path) = 0 THEN id ELSE path[1] END FROM posts WHERE id = $%d)"
 			s1 = fmt.Sprintf(s1, tq.Sign, counter)
 			counter = counter + 1
 			args = append(args, tq.Since)
