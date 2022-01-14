@@ -102,12 +102,6 @@ CREATE INDEX IF NOT EXISTS index_posts__thread ON posts(thread);
 DROP INDEX IF EXISTS index_posts__id_thread;
 CREATE INDEX IF NOT EXISTS index_posts__id_thread ON posts(id, thread);
 
-DROP INDEX IF EXISTS index_posts__parent_thread;
-CREATE INDEX IF NOT EXISTS index_posts__parent_thread ON posts(parent, thread) WHERE parent != 0; -- для related
-
-DROP INDEX IF EXISTS index_posts__path1_path_id;
--- CREATE INDEX IF NOT EXISTS index_posts__path1_path_id ON posts ((path[1]), path, id) WHERE path IS NOT NULL; -- для related
-
 -- индексы для forum_users
 
 
